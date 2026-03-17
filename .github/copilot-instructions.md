@@ -1,0 +1,94 @@
+# Copilot Instructions — GodotGDK
+
+## Project Overview
+
+GodotGDK is a GDExtension plugin (C++17) that integrates the **Microsoft public GDK** (not GDKX) with Godot 4.x, exposing Xbox Live services and GameInput to GDScript via engine singletons. It targets PC/Xbox app via the GRDK (Gaming Runtime Development Kit) only — Xbox console (ERA/GDKX) is explicitly out of scope. It ships as a Windows-only DLL loaded through the `.gdextension` system.
+
+## Build Commands
+
+```powershell
+# Configure (requires Microsoft GDK + Visual Studio 2022 with C++ Desktop workload)
+cmake -B build -G "Visual Studio 17 2022" -A x64
+
+# Build debug
+cmake --build build --config Debug
+
+# Build release
+cmake --build build --config Release
+```
+
+Output DLL lands in `addons/godot_gdk/bin/` and is auto-copied to `sample/addons/godot_gdk/bin/`.
+
+## Test Commands
+
+Tests run inside Godot's headless mode using the sample project's custom test harness:
+
+```powershell
+# Run full test suite (from repo root)
+cd sample
+godot --headless --script res://tests/run_tests.gd
+
+# Exit code: 0 = pass, 1 = failures
+```
+
+The test harness (`sample/tests/run_tests.gd`) extends `SceneTree` and tests singleton availability, class registration, API surface, signal connectivity, and addon structure. Tests that depend on GDK runtime services (Gaming Services, GameInput) gracefully skip when those aren't available.
+
+## Architecture
+
+### GDExtension Singleton Pattern
+
+Every module follows the same pattern — a C++ class registered as a Godot engine singleton:
+
+- **`GDKCore`** → singleton name `GDK` — GDK runtime lifecycle + XTaskQueue for async dispatch
+- **`GDKUserManager`** → singleton name `GDKUser` — Xbox Live sign-in (silent + UI, with auto-fallback)
+- **`GDKInput`** → singleton name `GDKInput` — GameInput polling for Xbox controllers + rumble
+
+Singletons are created/registered in `register_types.cpp` at `MODULE_INITIALIZATION_LEVEL_SCENE` and torn down in reverse order. GDScript accesses them directly by name (e.g., `GDK.initialize()`).
+
+### Async Model
+
+GDK async operations use `XTaskQueue` with ThreadPool dispatch for work and Manual dispatch for completions. `GDKCore::tick()` drains the completion port on the main thread — **games must call `GDK.tick()` every frame** (typically from an autoload `_process`). Async callbacks use `call_deferred("emit_signal", ...)` to safely signal GDScript from callback context.
+
+### Data Flow
+
+`GDKUserInfo` is a `RefCounted` wrapper around `XUserHandle` — it owns the handle and never exposes it to GDScript. When the user signs in asynchronously, `GDKUserManager` creates a `GDKUserInfo`, populates it from the handle, and emits `user_signed_in(user)`.
+
+### Editor Integration
+
+`addons/godot_gdk/editor/` contains:
+- **`gdk_editor_plugin.gd`** — registers the export platform
+- **`gdk_export_platform.gd`** — `EditorExportPlatformExtension` that generates `MicrosoftGame.config`, stages PCK + DLL, and packages via `makepkg` or registers loose via `wdapp`
+
+### Sample Project
+
+`sample/` is a self-contained Godot project with:
+- `gdk_bootstrap.gd` — autoload that initializes GDK, GameInput, and triggers silent sign-in
+- `main.gd` — demo UI with live gamepad visualizer and haptics testing
+- `tests/run_tests.gd` — headless test suite
+
+## Conventions
+
+### Adding a New GDK Module
+
+1. Create `src/gdk_<module>.h` and `src/gdk_<module>.cpp`
+2. Class extends `Object`, uses `GDCLASS` macro, has a static singleton pointer
+3. Bind methods and signals in `_bind_methods()` using `ClassDB::bind_method` / `ADD_SIGNAL`
+4. Register the class and create/register the singleton in `register_types.cpp`
+5. Add the `.cpp` file to `CMakeLists.txt`'s `add_library` source list
+6. Add cleanup in `uninitialize_gdk_extension` in reverse order
+
+### Windows Header Ordering
+
+Every header that includes GDK/Windows APIs must define `WIN32_LEAN_AND_MEAN` and include `<windows.h>` **before** any GDK headers. This is done via a guard block at the top of each header file.
+
+### Error Handling
+
+GDK `HRESULT` failures are formatted as hex strings (`0x%08X`) and reported through both `UtilityFunctions::push_error()` and signal emission (`error_occurred` / `sign_in_failed`). Methods that can fail return Godot's `Error` enum.
+
+### Signal-Driven API
+
+All async results are communicated through signals, not return values. GDScript consumers connect signals and `await` them. Methods that start async work (like `sign_in()`) return `void`.
+
+### GDScript API Naming
+
+C++ singletons use PascalCase class names, but GDScript accesses them through short names: `GDK`, `GDKUser`, `GDKInput`. Methods use snake_case per Godot convention.
