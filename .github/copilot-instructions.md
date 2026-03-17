@@ -8,16 +8,18 @@ GodotGDK is a GDExtension plugin (C++17) that integrates the **Microsoft public 
 
 ```powershell
 # Configure (requires Microsoft GDK + Visual Studio 2022 with C++ Desktop workload)
-cmake -B build -G "Visual Studio 17 2022" -A x64
+cmake --preset default
 
 # Build debug
-cmake --build build --config Debug
+cmake --build build --preset debug
 
 # Build release
-cmake --build build --config Release
+cmake --build build --preset release
 ```
 
-Output DLL lands in `addons/godot_gdk/bin/` and is auto-copied to `sample/addons/godot_gdk/bin/`.
+Output DLL lands in `addons/godot_gdk/bin/` and is auto-copied to `sample/addons/godot_gdk/bin/` along with PDB (debug) and addon scripts.
+
+The CMake build auto-detects the GDK via the `GRDKLatest` environment variable (set by the GDK installer), falling back to the standard install path. Override with `-DGDK_GAMEKIT=<path>` if needed.
 
 ## Test Commands
 

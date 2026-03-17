@@ -4,22 +4,44 @@ project(godot_gdk LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Godot-cpp
+# ── Submodule check ─────────────────────────────────────────────
+if(NOT EXISTS "${CMAKE_SOURCE_DIR}/godot-cpp/CMakeLists.txt")
+    message(FATAL_ERROR
+        "godot-cpp submodule not found. Run:\n"
+        "  git submodule update --init --recursive")
+endif()
+
 add_subdirectory(godot-cpp)
 
-# GDK paths
-set(GDK_ROOT "C:/Program Files (x86)/Microsoft GDK" CACHE PATH "Microsoft GDK install root")
+# ── GDK detection ───────────────────────────────────────────────
+# Prefer the GRDKLatest env var set by the GDK installer, fall back to standard path.
+if(DEFINED ENV{GRDKLatest})
+    set(_GDK_GAMEKIT_DEFAULT "$ENV{GRDKLatest}/GameKit")
+else()
+    set(_GDK_ROOT "C:/Program Files (x86)/Microsoft GDK")
+    file(GLOB _GDK_EDITIONS "${_GDK_ROOT}/[0-9]*")
+    if(NOT _GDK_EDITIONS)
+        message(FATAL_ERROR
+            "Microsoft GDK not found.\n"
+            "Install via: winget install Microsoft.Gaming.GDK\n"
+            "Or set GDK_GAMEKIT to your GameKit path.")
+    endif()
+    list(SORT _GDK_EDITIONS ORDER DESCENDING)
+    list(GET _GDK_EDITIONS 0 _GDK_EDITION_PATH)
+    set(_GDK_GAMEKIT_DEFAULT "${_GDK_EDITION_PATH}/GRDK/GameKit")
+endif()
 
-# Find the latest GDK edition
-file(GLOB GDK_EDITIONS "${GDK_ROOT}/[0-9]*")
-list(SORT GDK_EDITIONS ORDER DESCENDING)
-list(GET GDK_EDITIONS 0 GDK_EDITION_PATH)
-message(STATUS "Using GDK edition: ${GDK_EDITION_PATH}")
+set(GDK_GAMEKIT "${_GDK_GAMEKIT_DEFAULT}" CACHE PATH "Path to GDK GameKit directory")
 
-set(GDK_GAMEKIT "${GDK_EDITION_PATH}/GRDK/GameKit")
-set(GDK_EXTENSIONS "${GDK_EDITION_PATH}/GRDK/ExtensionLibraries")
+if(NOT EXISTS "${GDK_GAMEKIT}/Include/XGameRuntimeInit.h")
+    message(FATAL_ERROR
+        "GDK GameKit headers not found at: ${GDK_GAMEKIT}\n"
+        "Verify your GDK installation or set -DGDK_GAMEKIT=<path>")
+endif()
 
-# Our plugin library
+message(STATUS "GDK GameKit: ${GDK_GAMEKIT}")
+
+# ── Plugin library ──────────────────────────────────────────────
 add_library(godot_gdk SHARED
     src/register_types.cpp
     src/gdk_core.cpp
@@ -33,7 +55,7 @@ target_include_directories(godot_gdk PRIVATE
 )
 
 target_link_directories(godot_gdk PRIVATE
-    ${GDK_GAMEKIT}/Lib/amd64
+    "${GDK_GAMEKIT}/Lib/amd64"
 )
 
 target_link_libraries(godot_gdk PRIVATE
@@ -42,26 +64,27 @@ target_link_libraries(godot_gdk PRIVATE
     GameInput
 )
 
-# GameInput is a system COM interface, no extra lib needed beyond xgameruntime
-# Extension libraries (Xbox Services etc) will be added in later milestones
-
-# Output to both addon bin directories
+# ── Output naming ───────────────────────────────────────────────
+# Godot expects: <name>.windows.<profile>.x86_64.dll
 set(ADDON_BIN "${CMAKE_SOURCE_DIR}/addons/godot_gdk/bin")
 set(SAMPLE_BIN "${CMAKE_SOURCE_DIR}/sample/addons/godot_gdk/bin")
 
 set_target_properties(godot_gdk PROPERTIES
-    OUTPUT_NAME "godot_gdk.windows.release.x86_64"
-    RUNTIME_OUTPUT_DIRECTORY "${ADDON_BIN}"
-    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${ADDON_BIN}"
+    OUTPUT_NAME                      "godot_gdk.windows.release.x86_64"
+    OUTPUT_NAME_DEBUG                "godot_gdk.windows.debug.x86_64"
+    OUTPUT_NAME_RELWITHDEBINFO       "godot_gdk.windows.release.x86_64"
+    OUTPUT_NAME_MINSIZEREL           "godot_gdk.windows.release.x86_64"
+    RUNTIME_OUTPUT_DIRECTORY         "${ADDON_BIN}"
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG   "${ADDON_BIN}"
     RUNTIME_OUTPUT_DIRECTORY_RELEASE "${ADDON_BIN}"
-    LIBRARY_OUTPUT_DIRECTORY "${ADDON_BIN}"
-    LIBRARY_OUTPUT_DIRECTORY_DEBUG "${ADDON_BIN}"
+    LIBRARY_OUTPUT_DIRECTORY         "${ADDON_BIN}"
+    LIBRARY_OUTPUT_DIRECTORY_DEBUG   "${ADDON_BIN}"
     LIBRARY_OUTPUT_DIRECTORY_RELEASE "${ADDON_BIN}"
     PREFIX ""
     SUFFIX ".dll"
 )
 
-# Copy to sample project after build
+# ── Post-build: copy DLL + PDB to sample ────────────────────────
 add_custom_command(TARGET godot_gdk POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "$<TARGET_FILE:godot_gdk>"
@@ -69,7 +92,32 @@ add_custom_command(TARGET godot_gdk POST_BUILD
     COMMENT "Copying DLL to sample project"
 )
 
-# Debug variant
-set_target_properties(godot_gdk PROPERTIES
-    OUTPUT_NAME_DEBUG "godot_gdk.windows.debug.x86_64"
+add_custom_command(TARGET godot_gdk POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E
+        $<IF:$<CONFIG:Debug>,copy_if_different,true>
+        $<IF:$<CONFIG:Debug>,$<TARGET_FILE_DIR:godot_gdk>/$<TARGET_FILE_BASE_NAME:godot_gdk>.pdb,>
+        $<IF:$<CONFIG:Debug>,${SAMPLE_BIN}/,>
+    COMMENT "Copying PDB to sample project (Debug only)"
+)
+
+# ── Post-build: sync addon scripts to sample ────────────────────
+set(ADDON_SRC "${CMAKE_SOURCE_DIR}/addons/godot_gdk")
+set(ADDON_DST "${CMAKE_SOURCE_DIR}/sample/addons/godot_gdk")
+
+add_custom_command(TARGET godot_gdk POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${ADDON_SRC}/plugin.cfg"
+        "${ADDON_DST}/plugin.cfg"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${ADDON_SRC}/godot_gdk.gdextension"
+        "${ADDON_DST}/godot_gdk.gdextension"
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "${ADDON_DST}/editor"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${ADDON_SRC}/editor/gdk_editor_plugin.gd"
+        "${ADDON_DST}/editor/gdk_editor_plugin.gd"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${ADDON_SRC}/editor/gdk_export_platform.gd"
+        "${ADDON_DST}/editor/gdk_export_platform.gd"
+    COMMENT "Syncing addon scripts to sample project"
 )
