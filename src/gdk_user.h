@@ -9,6 +9,7 @@
 #include <godot_cpp/classes/ref.hpp>
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/classes/object.hpp>
+#include <godot_cpp/classes/image_texture.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/string.hpp>
 
@@ -52,6 +53,7 @@ class GDKUserManager : public Object {
     Ref<GDKUserInfo> m_current_user;
     bool m_sign_in_pending = false;
     bool m_silent_attempt = false; // tracks if current attempt was silent (for fallback)
+    bool m_picture_pending = false;
     XTaskQueueRegistrationToken m_change_token = {};
     bool m_change_registered = false;
 
@@ -72,12 +74,14 @@ public:
     void sign_in();
     void sign_in_silently();
     void sign_out();
+    void get_gamer_picture();
     Ref<GDKUserInfo> get_current_user() const;
     bool is_signed_in() const;
     bool is_sign_in_pending() const;
 
     // Called from async callbacks (main thread via task queue)
     void _on_sign_in_complete(XUserHandle handle, HRESULT hr, bool was_silent);
+    void _on_gamer_picture_complete(XAsyncBlock *async);
     void _on_user_change(XUserLocalId user_local_id, XUserChangeEvent event);
 };
 

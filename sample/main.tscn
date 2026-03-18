@@ -32,8 +32,33 @@ horizontal_alignment = 1
 layout_mode = 2
 text = "Initializing..."
 
+[node name="UserPanel" type="PanelContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="UserHBox" type="HBoxContainer" parent="VBoxContainer/UserPanel"]
+layout_mode = 2
+
+[node name="AvatarRect" type="TextureRect" parent="VBoxContainer/UserPanel/UserHBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(64, 64)
+expand_mode = 1
+stretch_mode = 5
+visible = false
+
+[node name="GamertagLabel" type="Label" parent="VBoxContainer/UserPanel/UserHBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Not signed in"
+
+[node name="XuidLabel" type="Label" parent="VBoxContainer/UserPanel/UserHBox"]
+layout_mode = 2
+size_flags_horizontal = 10
+theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
+text = ""
+
 [node name="UserLabel" type="Label" parent="VBoxContainer" unique_id=376679492]
 layout_mode = 2
+visible = false
 text = "User: Not signed in"
 
 [node name="InputLabel" type="Label" parent="VBoxContainer" unique_id=1823063938]
@@ -51,8 +76,22 @@ layout_mode = 2
 custom_minimum_size = Vector2(0, 48)
 focus_mode = 2
 focus_neighbor_top = NodePath("../SignInButton")
+focus_neighbor_bottom = NodePath("../AchievementButton")
 theme_override_font_sizes/font_size = 20
 text = "Haptics Demo (X = jolt, RT = rumble)"
+
+[node name="AchievementButton" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+focus_mode = 2
+focus_neighbor_top = NodePath("../HapticsToggle")
+focus_neighbor_bottom = NodePath("../SignInButton")
+disabled = true
+text = "🏆 Unlock Achievement: Demo Played"
+
+[node name="AchievementLabel" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
+text = ""
 
 [node name="HSeparator" type="HSeparator" parent="VBoxContainer"]
 layout_mode = 2

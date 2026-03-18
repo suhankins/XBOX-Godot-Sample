@@ -3,9 +3,14 @@ extends Control
 
 @onready var status_label: Label = $VBoxContainer/StatusLabel
 @onready var user_label: Label = $VBoxContainer/UserLabel
+@onready var gamertag_label: Label = $VBoxContainer/UserPanel/UserHBox/GamertagLabel
+@onready var xuid_label: Label = $VBoxContainer/UserPanel/UserHBox/XuidLabel
+@onready var avatar_rect: TextureRect = $VBoxContainer/UserPanel/UserHBox/AvatarRect
 @onready var input_label: Label = $VBoxContainer/InputLabel
 @onready var sign_in_button: Button = $VBoxContainer/SignInButton
 @onready var haptics_toggle: CheckButton = $VBoxContainer/HapticsToggle
+@onready var achievement_button: Button = $VBoxContainer/AchievementButton
+@onready var achievement_label: Label = $VBoxContainer/AchievementLabel
 @onready var gamepad_display: RichTextLabel = $VBoxContainer/GamepadDisplay
 
 # ── Haptics state ───────────────────────────────────────────────
@@ -15,9 +20,18 @@ var x_was_pressed := false
 var a_was_pressed := false
 const JOLT_DURATION := 0.15
 
+# ── Config ──────────────────────────────────────────────────────
+var demo_achievement_id := "1"
+
 func _ready() -> void:
+	# Load config
+	var cfg := ConfigFile.new()
+	if cfg.load("res://sample_config.cfg") == OK:
+		demo_achievement_id = cfg.get_value("achievements", "demo_achievement_id", "1")
+
 	sign_in_button.pressed.connect(_on_sign_in_pressed)
 	haptics_toggle.toggled.connect(_on_haptics_toggled)
+	achievement_button.pressed.connect(_on_achievement_pressed)
 
 	# Give the haptics toggle initial focus so gamepad can reach it immediately
 	haptics_toggle.grab_focus()
@@ -29,9 +43,12 @@ func _ready() -> void:
 	if GDKUser.is_signed_in():
 		var user = GDKUser.get_current_user()
 		if user:
-			user_label.text = "User: Signed In"
+			_show_user(user)
 			sign_in_button.disabled = true
 			sign_in_button.text = "Signed In"
+			GDKUser.get_gamer_picture()
+			if GDKAchievements.is_initialized():
+				GDKAchievements.check_achievement(demo_achievement_id)
 
 	GDK.connect("initialized", func():
 		status_label.text = "GDK: Initialized ✓"
@@ -40,13 +57,39 @@ func _ready() -> void:
 		status_label.text = "GDK Error: " + msg
 	)
 	GDKUser.connect("user_signed_in", func(user):
-		user_label.text = "User: Signed In"
+		_show_user(user)
 		sign_in_button.disabled = true
 		sign_in_button.text = "Signed In"
+		GDKUser.get_gamer_picture()
+		# Check if achievement is already unlocked before enabling button
+		if GDKAchievements.is_initialized():
+			GDKAchievements.check_achievement(demo_achievement_id)
 	)
 	GDKUser.connect("sign_in_failed", func(error):
-		user_label.text = "Sign-in failed"
+		gamertag_label.text = "Sign-in failed"
+		xuid_label.text = ""
 		sign_in_button.disabled = false
+	)
+	GDKUser.connect("gamer_picture_loaded", func(texture):
+		avatar_rect.texture = texture
+		avatar_rect.visible = true
+	)
+	GDKAchievements.connect("achievement_unlocked", func(id):
+		achievement_label.text = "✅ Achievement unlocked!"
+		achievement_button.text = "🏆 Achievement Unlocked!"
+		achievement_button.disabled = true
+	)
+	GDKAchievements.connect("achievement_update_failed", func(id, error):
+		achievement_label.text = "❌ " + error
+		achievement_button.disabled = false
+	)
+	GDKAchievements.connect("achievement_checked", func(id, is_unlocked):
+		if is_unlocked:
+			achievement_button.text = "🏆 Already Unlocked"
+			achievement_button.disabled = true
+			achievement_label.text = "Achievement previously earned"
+		else:
+			achievement_button.disabled = false
 	)
 	GDKInput.connect("device_connected", func(id):
 		input_label.text = "Controllers: %d" % GDKInput.get_connected_device_count()
@@ -61,10 +104,20 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventJoypadButton and event.button_index == JOY_BUTTON_A:
 		get_viewport().set_input_as_handled()
 
+func _show_user(user) -> void:
+	gamertag_label.text = user.gamertag if user.gamertag else "Unknown"
+	xuid_label.text = "XUID: %d" % user.xuid
+
 func _on_sign_in_pressed() -> void:
 	sign_in_button.disabled = true
 	sign_in_button.text = "Signing in..."
 	GDKUser.sign_in()
+
+func _on_achievement_pressed() -> void:
+	achievement_button.disabled = true
+	achievement_button.text = "Unlocking..."
+	achievement_label.text = ""
+	GDKAchievements.unlock(demo_achievement_id)
 
 func _on_haptics_toggled(enabled: bool) -> void:
 	haptics_enabled = enabled

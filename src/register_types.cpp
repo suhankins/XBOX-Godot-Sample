@@ -8,12 +8,14 @@
 #include "gdk_core.h"
 #include "gdk_user.h"
 #include "gdk_input.h"
+#include "gdk_achievements.h"
 
 using namespace godot;
 
 static GDKCore *gdk_core_singleton = nullptr;
 static GDKUserManager *gdk_user_singleton = nullptr;
 static GDKInput *gdk_input_singleton = nullptr;
+static GDKAchievements *gdk_achievements_singleton = nullptr;
 
 void initialize_gdk_extension(ModuleInitializationLevel p_level) {
     if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
@@ -22,6 +24,7 @@ void initialize_gdk_extension(ModuleInitializationLevel p_level) {
         ClassDB::register_class<GDKUserInfo>();
         ClassDB::register_class<GDKUserManager>();
         ClassDB::register_class<GDKInput>();
+        ClassDB::register_class<GDKAchievements>();
 
         // Create and register singletons
         gdk_core_singleton = memnew(GDKCore);
@@ -32,17 +35,25 @@ void initialize_gdk_extension(ModuleInitializationLevel p_level) {
 
         gdk_input_singleton = memnew(GDKInput);
         Engine::get_singleton()->register_singleton("GDKInput", GDKInput::get_singleton());
+
+        gdk_achievements_singleton = memnew(GDKAchievements);
+        Engine::get_singleton()->register_singleton("GDKAchievements", GDKAchievements::get_singleton());
     }
 }
 
 void uninitialize_gdk_extension(ModuleInitializationLevel p_level) {
     if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
         // Unregister singletons
+        Engine::get_singleton()->unregister_singleton("GDKAchievements");
         Engine::get_singleton()->unregister_singleton("GDKInput");
         Engine::get_singleton()->unregister_singleton("GDKUser");
         Engine::get_singleton()->unregister_singleton("GDK");
 
-        // Clean up
+        // Clean up (reverse order of creation)
+        if (gdk_achievements_singleton) {
+            memdelete(gdk_achievements_singleton);
+            gdk_achievements_singleton = nullptr;
+        }
         if (gdk_input_singleton) {
             memdelete(gdk_input_singleton);
             gdk_input_singleton = nullptr;

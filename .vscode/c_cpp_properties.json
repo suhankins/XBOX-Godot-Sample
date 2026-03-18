@@ -1,0 +1,25 @@
+{
+    "configurations": [
+        {
+            "name": "GDK",
+            "compilerPath": "cl.exe",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "windows-msvc-x64",
+            "includePath": [
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/godot-cpp/include",
+                "${workspaceFolder}/godot-cpp/gdextension",
+                "${workspaceFolder}/build/godot-cpp/gen/include",
+                "C:/Program Files (x86)/Microsoft GDK/251002/GRDK/GameKit/Include",
+                "C:/Program Files (x86)/Microsoft GDK/251002/GRDK/ExtensionLibraries/Xbox.Services.API.C/Include",
+                "C:/Program Files (x86)/Microsoft GDK/251002/GRDK/ExtensionLibraries/Xbox.LibHttpClient/Include"
+            ],
+            "defines": [
+                "_GAMING_DESKTOP",
+                "WIN32_LEAN_AND_MEAN"
+            ]
+        }
+    ],
+    "version": 4
+}

@@ -3,9 +3,14 @@
 
 #include <godot_cpp/variant/utility_functions.hpp>
 #include <godot_cpp/classes/engine.hpp>
+#include <godot_cpp/classes/image.hpp>
+#include <godot_cpp/classes/image_texture.hpp>
+#include <godot_cpp/variant/packed_byte_array.hpp>
 
 #include <XUser.h>
 #include <XAsync.h>
+
+#include <vector>
 
 namespace godot {
 
@@ -103,6 +108,7 @@ void GDKUserManager::_bind_methods() {
     ClassDB::bind_method(D_METHOD("sign_in"), &GDKUserManager::sign_in);
     ClassDB::bind_method(D_METHOD("sign_in_silently"), &GDKUserManager::sign_in_silently);
     ClassDB::bind_method(D_METHOD("sign_out"), &GDKUserManager::sign_out);
+    ClassDB::bind_method(D_METHOD("get_gamer_picture"), &GDKUserManager::get_gamer_picture);
     ClassDB::bind_method(D_METHOD("get_current_user"), &GDKUserManager::get_current_user);
     ClassDB::bind_method(D_METHOD("is_signed_in"), &GDKUserManager::is_signed_in);
     ClassDB::bind_method(D_METHOD("is_sign_in_pending"), &GDKUserManager::is_sign_in_pending);
@@ -110,6 +116,7 @@ void GDKUserManager::_bind_methods() {
     ADD_SIGNAL(MethodInfo("user_signed_in", PropertyInfo(Variant::OBJECT, "user")));
     ADD_SIGNAL(MethodInfo("sign_in_failed", PropertyInfo(Variant::STRING, "error")));
     ADD_SIGNAL(MethodInfo("user_signed_out"));
+    ADD_SIGNAL(MethodInfo("gamer_picture_loaded", PropertyInfo(Variant::OBJECT, "texture")));
 }
 
 // ── Internal state management ───────────────────────────────────
@@ -173,6 +180,11 @@ void GDKUserManager::_on_user_change(XUserLocalId user_local_id, XUserChangeEven
             UtilityFunctions::print("GDK: User signing out...");
             break;
         case XUserChangeEvent::GamerPicture:
+            // Re-fetch the gamer picture
+            if (m_current_user.is_valid() && m_current_user->get_handle()) {
+                get_gamer_picture();
+            }
+            break;
         case XUserChangeEvent::Gamertag:
             // Refresh user data
             if (m_current_user.is_valid() && m_current_user->get_handle()) {
@@ -311,6 +323,87 @@ void GDKUserManager::sign_in_silently() {
         delete ctx;
         sign_in();
     }
+}
+
+// ── Async gamer picture ─────────────────────────────────────────
+
+struct GamerPictureContext {
+    GDKUserManager *manager;
+    XAsyncBlock async;
+};
+
+static void CALLBACK gamer_picture_complete(XAsyncBlock *async) {
+    auto *ctx = static_cast<GamerPictureContext *>(async->context);
+    ctx->manager->_on_gamer_picture_complete(async);
+    delete ctx;
+}
+
+void GDKUserManager::get_gamer_picture() {
+    GDKCore *core = GDKCore::get_singleton();
+    ERR_FAIL_COND_MSG(!core || !core->is_initialized(),
+        "GDK not initialized. Call GDK.initialize() first.");
+    ERR_FAIL_COND_MSG(!is_signed_in(), "No user signed in.");
+
+    if (m_picture_pending) {
+        UtilityFunctions::push_warning("GDK: Gamer picture fetch already in progress");
+        return;
+    }
+
+    m_picture_pending = true;
+
+    auto *ctx = new GamerPictureContext();
+    ctx->manager = this;
+    ctx->async = {};
+    ctx->async.queue = core->get_task_queue();
+    ctx->async.context = ctx;
+    ctx->async.callback = gamer_picture_complete;
+
+    HRESULT hr = XUserGetGamerPictureAsync(
+        m_current_user->get_handle(),
+        XUserGamerPictureSize::Medium, // 208x208
+        &ctx->async
+    );
+
+    if (FAILED(hr)) {
+        m_picture_pending = false;
+        UtilityFunctions::push_warning("GDK: Failed to start gamer picture fetch");
+        delete ctx;
+    }
+}
+
+void GDKUserManager::_on_gamer_picture_complete(XAsyncBlock *async) {
+    m_picture_pending = false;
+
+    size_t buffer_size = 0;
+    HRESULT hr = XUserGetGamerPictureResultSize(async, &buffer_size);
+    if (FAILED(hr) || buffer_size == 0) {
+        UtilityFunctions::push_warning("GDK: Failed to get gamer picture size");
+        return;
+    }
+
+    std::vector<uint8_t> buffer(buffer_size);
+    size_t buffer_used = 0;
+    hr = XUserGetGamerPictureResult(async, buffer.size(), buffer.data(), &buffer_used);
+    if (FAILED(hr)) {
+        UtilityFunctions::push_warning("GDK: Failed to get gamer picture data");
+        return;
+    }
+
+    // Convert PNG bytes to Godot ImageTexture
+    PackedByteArray png_data;
+    png_data.resize(buffer_used);
+    memcpy(png_data.ptrw(), buffer.data(), buffer_used);
+
+    Ref<Image> image;
+    image.instantiate();
+    Error err = image->load_png_from_buffer(png_data);
+    if (err != OK) {
+        UtilityFunctions::push_warning("GDK: Failed to decode gamer picture PNG");
+        return;
+    }
+
+    Ref<ImageTexture> texture = ImageTexture::create_from_image(image);
+    call_deferred("emit_signal", "gamer_picture_loaded", texture);
 }
 
 void GDKUserManager::sign_out() {

@@ -41,28 +41,60 @@ endif()
 
 message(STATUS "GDK GameKit: ${GDK_GAMEKIT}")
 
+# ── Xbox Services API (XSAPI) detection ─────────────────────────
+set(_XSAPI_EXT "${GDK_GAMEKIT}/../ExtensionLibraries")
+get_filename_component(_XSAPI_EXT "${_XSAPI_EXT}" ABSOLUTE)
+
+set(XSAPI_ROOT "${_XSAPI_EXT}/Xbox.Services.API.C" CACHE PATH "Path to Xbox Services API C")
+set(LIBHTTPCLIENT_ROOT "${_XSAPI_EXT}/Xbox.LibHttpClient" CACHE PATH "Path to libHttpClient")
+
+if(NOT EXISTS "${XSAPI_ROOT}/Include/xsapi-c/services_c.h")
+    message(FATAL_ERROR
+        "Xbox Services API (XSAPI) not found at: ${XSAPI_ROOT}\n"
+        "Ensure the GDK is installed with Xbox Extensions, or set -DXSAPI_ROOT=<path>")
+endif()
+
+if(NOT EXISTS "${LIBHTTPCLIENT_ROOT}/Include/httpClient/httpClient.h")
+    message(FATAL_ERROR
+        "libHttpClient not found at: ${LIBHTTPCLIENT_ROOT}\n"
+        "Ensure the GDK is installed with Xbox Extensions.")
+endif()
+
+message(STATUS "XSAPI: ${XSAPI_ROOT}")
+message(STATUS "libHttpClient: ${LIBHTTPCLIENT_ROOT}")
+
 # ── Plugin library ──────────────────────────────────────────────
 add_library(godot_gdk SHARED
     src/register_types.cpp
     src/gdk_core.cpp
     src/gdk_user.cpp
     src/gdk_input.cpp
+    src/gdk_achievements.cpp
 )
 
 target_include_directories(godot_gdk PRIVATE
     src/
     "${GDK_GAMEKIT}/Include"
+    "${XSAPI_ROOT}/Include"
+    "${LIBHTTPCLIENT_ROOT}/Include"
 )
 
 target_link_directories(godot_gdk PRIVATE
     "${GDK_GAMEKIT}/Lib/amd64"
+    "${XSAPI_ROOT}/Lib/x64/$<IF:$<CONFIG:Debug>,Debug,Release>"
+    "${LIBHTTPCLIENT_ROOT}/Lib/x64"
 )
 
 target_link_libraries(godot_gdk PRIVATE
     godot::cpp
     xgameruntime
     GameInput
+    Microsoft.Xbox.Services.GDK.C.Thunks
+    libHttpClient.GDK
 )
+
+# GDK platform identifier — required for XSAPI/libHttpClient headers
+target_compile_definitions(godot_gdk PRIVATE _GAMING_DESKTOP)
 
 # ── Output naming ───────────────────────────────────────────────
 # Godot expects: <name>.windows.<profile>.x86_64.dll
@@ -100,6 +132,18 @@ add_custom_command(TARGET godot_gdk POST_BUILD
     COMMENT "Copying PDB to sample project (Debug only)"
 )
 
+# ── Post-build: copy XSAPI + libHttpClient runtime DLLs ─────────
+set(_XSAPI_DLL "${XSAPI_ROOT}/Lib/x64/$<IF:$<CONFIG:Debug>,Debug,Release>/Microsoft.Xbox.Services.GDK.C.Thunks.dll")
+set(_HTTPCLIENT_DLL "${LIBHTTPCLIENT_ROOT}/Redist/x64/libHttpClient.GDK.dll")
+
+add_custom_command(TARGET godot_gdk POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_XSAPI_DLL}" "${ADDON_BIN}/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_HTTPCLIENT_DLL}" "${ADDON_BIN}/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_XSAPI_DLL}" "${SAMPLE_BIN}/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_HTTPCLIENT_DLL}" "${SAMPLE_BIN}/"
+    COMMENT "Copying XSAPI and libHttpClient runtime DLLs"
+)
+
 # ── Post-build: sync addon scripts to sample ────────────────────
 set(ADDON_SRC "${CMAKE_SOURCE_DIR}/addons/godot_gdk")
 set(ADDON_DST "${CMAKE_SOURCE_DIR}/sample/addons/godot_gdk")
@@ -119,5 +163,8 @@ add_custom_command(TARGET godot_gdk POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${ADDON_SRC}/editor/gdk_export_platform.gd"
         "${ADDON_DST}/editor/gdk_export_platform.gd"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${ADDON_SRC}/editor/gdk_setup_panel.gd"
+        "${ADDON_DST}/editor/gdk_setup_panel.gd"
     COMMENT "Syncing addon scripts to sample project"
 )

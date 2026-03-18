@@ -11,8 +11,15 @@ var _makepkg := ""
 var _wdapp := ""
 var _gdk_found := false
 
+# Cached sample_config.cfg values (loaded once on init)
+var _sample_config := ConfigFile.new()
+var _has_sample_config := false
+
 func _initialize() -> void:
 	_detect_gdk()
+	_has_sample_config = _sample_config.load("res://sample_config.cfg") == OK
+	if _has_sample_config:
+		print("[GDK Export] Loaded sample_config.cfg — values will auto-populate export fields")
 
 func _get_name() -> String:
 	return PLATFORM_NAME
@@ -36,25 +43,39 @@ func _get_preset_features(p_preset: EditorExportPreset) -> PackedStringArray:
 	return PackedStringArray(["windows", "gdk", "x86_64"])
 
 func _get_export_options() -> Array[Dictionary]:
+	# Load defaults from sample_config.cfg if it exists
+	var cfg := ConfigFile.new()
+	var has_cfg := cfg.load("res://sample_config.cfg") == OK
+
+	var def_title := cfg.get_value("xbox_live", "title_id", "") if has_cfg else ""
+	var def_msa := cfg.get_value("xbox_live", "msa_app_id", "") if has_cfg else ""
+	var def_store := cfg.get_value("xbox_live", "store_id", "") if has_cfg else ""
+	var def_scid := cfg.get_value("xbox_live", "scid", "") if has_cfg else ""
+	var def_sandbox := cfg.get_value("xbox_live", "sandbox_id", "RETAIL") if has_cfg else "RETAIL"
+	var def_game := cfg.get_value("identity", "game_name", "My Godot Game") if has_cfg else "My Godot Game"
+	var def_pub := cfg.get_value("identity", "publisher", "CN=Publisher") if has_cfg else "CN=Publisher"
+	var def_pub_display := cfg.get_value("identity", "publisher_display_name", "Publisher Name") if has_cfg else "Publisher Name"
+	var def_version := cfg.get_value("identity", "version", "1.0.0.0") if has_cfg else "1.0.0.0"
+
 	return [
 		# ── Identity ──
-		_opt("identity/game_name", TYPE_STRING, "My Godot Game",
+		_opt("identity/game_name", TYPE_STRING, def_game,
 			PROPERTY_HINT_NONE, "", true),
-		_opt("identity/publisher_name", TYPE_STRING, "CN=Publisher",
+		_opt("identity/publisher_name", TYPE_STRING, def_pub,
 			PROPERTY_HINT_NONE, "", true),
-		_opt("identity/publisher_display_name", TYPE_STRING, "Publisher Name",
+		_opt("identity/publisher_display_name", TYPE_STRING, def_pub_display,
 			PROPERTY_HINT_NONE, "", true),
-		_opt("identity/version", TYPE_STRING, "1.0.0.0",
+		_opt("identity/version", TYPE_STRING, def_version,
 			PROPERTY_HINT_NONE, "", true),
 
 		# ── Xbox Live (optional — requires Partner Center) ──
-		_opt("xbox_live/title_id", TYPE_STRING, "",
+		_opt("xbox_live/title_id", TYPE_STRING, def_title,
 			PROPERTY_HINT_NONE, "Hex Title ID from Partner Center"),
-		_opt("xbox_live/msa_app_id", TYPE_STRING, "",
+		_opt("xbox_live/msa_app_id", TYPE_STRING, def_msa,
 			PROPERTY_HINT_NONE, "MSA App ID from Partner Center"),
-		_opt("xbox_live/store_id", TYPE_STRING, "",
+		_opt("xbox_live/store_id", TYPE_STRING, def_store,
 			PROPERTY_HINT_NONE, "Store ID from Partner Center"),
-		_opt("xbox_live/scid", TYPE_STRING, "",
+		_opt("xbox_live/scid", TYPE_STRING, def_scid,
 			PROPERTY_HINT_NONE, "Service Configuration ID"),
 
 		# ── Packaging ──
@@ -68,7 +89,7 @@ func _get_export_options() -> Array[Dictionary]:
 		_opt("dev/register_loose", TYPE_BOOL, true,
 			PROPERTY_HINT_NONE,
 			"Use wdapp register for fast iteration instead of full packaging"),
-		_opt("dev/sandbox_id", TYPE_STRING, "RETAIL",
+		_opt("dev/sandbox_id", TYPE_STRING, def_sandbox,
 			PROPERTY_HINT_NONE, "Xbox Live sandbox ID"),
 	]
 
@@ -192,14 +213,24 @@ func _export_project(p_preset: EditorExportPreset, p_debug: bool, p_path: String
 
 # ── MicrosoftGame.config generation ─────────────────────────────
 
+## Read a preset value, falling back to sample_config.cfg if the preset value is empty.
+func _preset_or_config(p_preset: EditorExportPreset, preset_key: String,
+		config_section: String, config_key: String, fallback: String = "") -> String:
+	var val: String = p_preset.get(preset_key) if p_preset.has(preset_key) else ""
+	if val == "" and _has_sample_config:
+		val = _sample_config.get_value(config_section, config_key, "")
+	if val == "":
+		val = fallback
+	return val
+
 func _generate_microsoft_game_config(p_preset: EditorExportPreset, exe_name: String) -> String:
-	var game_name: String = p_preset.get("identity/game_name") if p_preset.has("identity/game_name") else "MyGodotGame"
-	var publisher: String = p_preset.get("identity/publisher_name") if p_preset.has("identity/publisher_name") else "CN=Publisher"
-	var pub_display: String = p_preset.get("identity/publisher_display_name") if p_preset.has("identity/publisher_display_name") else "Publisher"
-	var version: String = p_preset.get("identity/version") if p_preset.has("identity/version") else "1.0.0.0"
-	var title_id: String = p_preset.get("xbox_live/title_id") if p_preset.has("xbox_live/title_id") else ""
-	var msa_app_id: String = p_preset.get("xbox_live/msa_app_id") if p_preset.has("xbox_live/msa_app_id") else ""
-	var store_id: String = p_preset.get("xbox_live/store_id") if p_preset.has("xbox_live/store_id") else ""
+	var game_name := _preset_or_config(p_preset, "identity/game_name", "identity", "game_name", "MyGodotGame")
+	var publisher := _preset_or_config(p_preset, "identity/publisher_name", "identity", "publisher", "CN=Publisher")
+	var pub_display := _preset_or_config(p_preset, "identity/publisher_display_name", "identity", "publisher_display_name", "Publisher")
+	var version := _preset_or_config(p_preset, "identity/version", "identity", "version", "1.0.0.0")
+	var title_id := _preset_or_config(p_preset, "xbox_live/title_id", "xbox_live", "title_id")
+	var msa_app_id := _preset_or_config(p_preset, "xbox_live/msa_app_id", "xbox_live", "msa_app_id")
+	var store_id := _preset_or_config(p_preset, "xbox_live/store_id", "xbox_live", "store_id")
 
 	# Clean game name for identity (alphanumeric + dots only)
 	var identity_name := game_name.replace(" ", "").replace("-", "")

@@ -109,7 +109,7 @@ void GDKInput::on_device_connected(IGameInputDevice *device) {
     m_device_count++;
 
     UtilityFunctions::print("GameInput: Controller connected as joy ", joy_id);
-    emit_signal("device_connected", joy_id);
+    call_deferred("emit_signal", "device_connected", joy_id);
 }
 
 void GDKInput::on_device_disconnected(IGameInputDevice *device) {
@@ -124,7 +124,7 @@ void GDKInput::on_device_disconnected(IGameInputDevice *device) {
     m_device_count--;
 
     UtilityFunctions::print("GameInput: Controller disconnected, joy ", joy_id);
-    emit_signal("device_disconnected", joy_id);
+    call_deferred("emit_signal", "device_disconnected", joy_id);
 }
 
 Error GDKInput::initialize() {
