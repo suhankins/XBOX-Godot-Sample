@@ -1,6 +1,6 @@
 # GodotGDK
 
-An open-source GDExtension plugin that integrates the Microsoft public GDK
+A GDExtension plugin that integrates the Microsoft public GDK
 (Game Development Kit) with Godot 4.x — enabling Godot games to ship on the
 Xbox app / Microsoft Store with Xbox Live services.
 
@@ -244,6 +244,3 @@ to wipe achievements, stats, and leaderboards for the specified test account. Yo
 > **Note:** Resets only work on Xbox test accounts in a development sandbox, not retail accounts.
 > Restart the game after resetting for changes to take effect.
 
-## License
-
-MIT
