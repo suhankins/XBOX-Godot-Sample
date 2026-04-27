@@ -96,6 +96,20 @@ target_link_libraries(godot_gdk PRIVATE
 # GDK platform identifier — required for XSAPI/libHttpClient headers
 target_compile_definitions(godot_gdk PRIVATE _GAMING_DESKTOP)
 
+# ── Standalone GameInput extension scaffold ──────────────────────
+add_library(godot_gameinput SHARED
+    src/godot_gameinput/register_types.cpp
+    src/godot_gameinput/gameinput_extension.cpp
+)
+
+target_include_directories(godot_gameinput PRIVATE
+    src/godot_gameinput/
+)
+
+target_link_libraries(godot_gameinput PRIVATE
+    godot::cpp
+)
+
 # ── Output naming ───────────────────────────────────────────────
 # Godot expects: <name>.windows.<profile>.x86_64.dll
 set(ADDON_BIN "${CMAKE_SOURCE_DIR}/addons/godot_gdk/bin")
@@ -112,6 +126,23 @@ set_target_properties(godot_gdk PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY         "${ADDON_BIN}"
     LIBRARY_OUTPUT_DIRECTORY_DEBUG   "${ADDON_BIN}"
     LIBRARY_OUTPUT_DIRECTORY_RELEASE "${ADDON_BIN}"
+    PREFIX ""
+    SUFFIX ".dll"
+)
+
+set(GAMEINPUT_ADDON_BIN "${CMAKE_SOURCE_DIR}/addons/godot_gameinput/bin")
+
+set_target_properties(godot_gameinput PROPERTIES
+    OUTPUT_NAME                      "godot_gameinput.windows.release.x86_64"
+    OUTPUT_NAME_DEBUG                "godot_gameinput.windows.debug.x86_64"
+    OUTPUT_NAME_RELWITHDEBINFO       "godot_gameinput.windows.release.x86_64"
+    OUTPUT_NAME_MINSIZEREL           "godot_gameinput.windows.release.x86_64"
+    RUNTIME_OUTPUT_DIRECTORY         "${GAMEINPUT_ADDON_BIN}"
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG   "${GAMEINPUT_ADDON_BIN}"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${GAMEINPUT_ADDON_BIN}"
+    LIBRARY_OUTPUT_DIRECTORY         "${GAMEINPUT_ADDON_BIN}"
+    LIBRARY_OUTPUT_DIRECTORY_DEBUG   "${GAMEINPUT_ADDON_BIN}"
+    LIBRARY_OUTPUT_DIRECTORY_RELEASE "${GAMEINPUT_ADDON_BIN}"
     PREFIX ""
     SUFFIX ".dll"
 )
