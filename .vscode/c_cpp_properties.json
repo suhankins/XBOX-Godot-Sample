@@ -11,9 +11,7 @@
                 "${workspaceFolder}/godot-cpp/include",
                 "${workspaceFolder}/godot-cpp/gdextension",
                 "${workspaceFolder}/build/godot-cpp/gen/include",
-                "C:/Program Files (x86)/Microsoft GDK/251002/GRDK/GameKit/Include",
-                "C:/Program Files (x86)/Microsoft GDK/251002/GRDK/ExtensionLibraries/Xbox.Services.API.C/Include",
-                "C:/Program Files (x86)/Microsoft GDK/251002/GRDK/ExtensionLibraries/Xbox.LibHttpClient/Include"
+                "${env:GameDKCoreLatest}windows\\include"
             ],
             "defines": [
                 "_GAMING_DESKTOP",
