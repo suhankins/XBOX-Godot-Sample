@@ -51,7 +51,7 @@ cmake --build build --preset release
 The build:
 - Outputs addon DLLs to `addons/godot_gdk/bin/` and `addons/godot_gameinput/bin/`
 - Copies built addon DLLs into `sample/addons/godot_gdk/bin/` and `sample/addons/godot_gameinput/bin/`
-- Copies required GDK runtime DLLs (XSAPI, libHttpClient) for `godot_gdk` to both locations
+- Copies required GDK runtime DLLs (XSAPI Thunks, libHttpClient) for `godot_gdk` to both locations
 
 Selective configure/build flows are also available:
 
@@ -74,18 +74,15 @@ cmake --build --preset debug-gameinput
 
 ### 4. CMake auto-detection
 
-CMake automatically detects the GDK dependencies needed by `godot_gdk`:
-- **GDK GameKit** — via the `GRDKLatest` env var or `C:/Program Files (x86)/Microsoft GDK/`
-- **Xbox Services API (XSAPI)** — from `ExtensionLibraries/Xbox.Services.API.C`
-- **libHttpClient** — from `ExtensionLibraries/Xbox.LibHttpClient`
+CMake automatically detects the newer GDK Windows layout needed by `godot_gdk`:
+- **GDK Windows layout** — via the `GameDKCoreLatest` env var (preferred), `GameDKLatest`, or the latest `C:/Program Files (x86)/Microsoft GDK/<edition>/windows` install
+- **Xbox Services API (XSAPI)** and **libHttpClient** — from that same `windows/` include, lib, and bin layout
 
 If auto-detection fails, override manually:
 
 ```powershell
 cmake --preset default `
-    -DGDK_GAMEKIT="C:/path/to/GameKit" `
-    -DXSAPI_ROOT="C:/path/to/Xbox.Services.API.C" `
-    -DLIBHTTPCLIENT_ROOT="C:/path/to/Xbox.LibHttpClient"
+    -DGDK_WINDOWS="C:/Program Files (x86)/Microsoft GDK/260400/windows"
 ```
 
 ## VS Code Setup
@@ -95,8 +92,8 @@ After building, VS Code IntelliSense should work automatically with the included
 
 1. Ensure you've **built at least once** — godot-cpp headers are generated during the first build
    into `build/godot-cpp/gen/include/`
-2. If your GDK is installed at a non-default path, update the paths in
-   `.vscode/c_cpp_properties.json`
+2. Ensure the `GameDKCoreLatest` environment variable is available (or update the
+   GDK include path in `.vscode/c_cpp_properties.json`)
 3. Reload VS Code (`Ctrl+Shift+P` → "C/C++: Reset IntelliSense Database")
 
 The config defines `_GAMING_DESKTOP` which is required for XSAPI/libHttpClient platform detection.

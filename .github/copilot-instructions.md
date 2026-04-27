@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-GodotGDK is a repository of GDExtension addons (C++17) centered on the **Microsoft public GDK** (not GDKX) for Godot 4.x. The primary addon is `godot_gdk`, and `godot_gameinput` is a separate addon target with its own `CMakeLists.txt`. The repo targets PC/Xbox app via the GRDK (Gaming Runtime Development Kit) only — Xbox console (ERA/GDKX) is explicitly out of scope. The addons ship as Windows-only DLLs loaded through the `.gdextension` system.
+GodotGDK is a repository of GDExtension addons (C++17) centered on the **Microsoft public GDK** (not GDKX) for Godot 4.x. The primary addon is `godot_gdk`, and `godot_gameinput` is a separate addon target with its own `CMakeLists.txt`. The repo targets the public GDK Windows layout for PC/Xbox app scenarios only — Xbox console (ERA/GDKX) is explicitly out of scope. The addons ship as Windows-only DLLs loaded through the `.gdextension` system.
 
 ## Build Commands
 
@@ -25,7 +25,7 @@ The root `CMakeLists.txt` is a thin superproject. Addon-local build logic lives 
 
 Output DLLs land in `addons/godot_gdk/bin/` and `addons/godot_gameinput/bin/`, and are auto-copied to the matching `sample/addons/.../bin/` folders. The GDK addon also copies its PDB (debug), editor assets, and runtime DLLs.
 
-The GDK addon build auto-detects the GDK via the `GRDKLatest` environment variable (set by the GDK installer), falling back to the standard install path. It also auto-detects **Xbox Services API (XSAPI)** and **libHttpClient** from `ExtensionLibraries/` relative to the GDK. Override with `-DGDK_GAMEKIT=<path>`, `-DXSAPI_ROOT=<path>`, or `-DLIBHTTPCLIENT_ROOT=<path>` if needed.
+The GDK addon build auto-detects the newer Windows layout via the `GameDKCoreLatest` environment variable (preferred), `GameDKLatest`, or the standard install path. XSAPI and **libHttpClient** are resolved from that same `windows/` include, lib, and bin layout. Override with `-DGDK_WINDOWS=<path>` if needed.
 
 ## Test Commands
 

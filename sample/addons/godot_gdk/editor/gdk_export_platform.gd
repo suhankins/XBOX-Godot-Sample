@@ -334,42 +334,60 @@ func _makepkg_pack(staging_dir: String, output_path: String, p_preset: EditorExp
 # ── Helpers ─────────────────────────────────────────────────────
 
 func _detect_gdk() -> void:
-	# Check standard install path
 	var base := "C:\\Program Files (x86)\\Microsoft GDK"
-	if not DirAccess.dir_exists_absolute(base):
+	var edition_roots: Array[String] = []
+
+	for raw_root in [OS.get_environment("GameDKCoreLatest"), OS.get_environment("GameDKLatest")]:
+		if raw_root == "":
+			continue
+		var normalized_root := raw_root.trim_suffix("\\").trim_suffix("/")
+		if not edition_roots.has(normalized_root):
+			edition_roots.append(normalized_root)
+
+	if DirAccess.dir_exists_absolute(base):
+		var da := DirAccess.open(base)
+		if da == null:
+			_gdk_found = false
+			return
+
+		var editions: Array[String] = []
+		da.list_dir_begin()
+		var entry := da.get_next()
+		while entry != "":
+			if da.current_is_dir() and entry[0].is_valid_int():
+				editions.append(entry)
+			entry = da.get_next()
+		da.list_dir_end()
+
+		editions.sort()
+		if not editions.is_empty():
+			var latest_root := base + "\\" + editions[-1]
+			if not edition_roots.has(latest_root):
+				edition_roots.append(latest_root)
+
+	if edition_roots.is_empty():
 		push_warning("GDK Export: Microsoft GDK not found at ", base)
 		_gdk_found = false
 		return
 
-	# Find latest edition
-	var da := DirAccess.open(base)
-	if da == null:
+	for root in edition_roots:
+		if DirAccess.dir_exists_absolute(root + "\\windows"):
+			_gdk_root = root
+			break
+
+	if _gdk_root == "":
+		push_warning("GDK Export: No Windows-layout GDK installation was found")
 		_gdk_found = false
 		return
 
-	var editions: Array[String] = []
-	da.list_dir_begin()
-	var entry := da.get_next()
-	while entry != "":
-		if da.current_is_dir() and entry[0].is_valid_int():
-			editions.append(entry)
-		entry = da.get_next()
-	da.list_dir_end()
-
-	if editions.is_empty():
-		_gdk_found = false
-		return
-
-	editions.sort()
-	_gdk_root = base + "\\" + editions[-1]
-
-	# Locate tools
-	_makepkg = base + "\\bin\\makepkg.exe"
-	_wdapp = base + "\\bin\\wdapp.exe"
+	var tools_root := _gdk_root.get_base_dir()
+	_makepkg = tools_root + "\\bin\\makepkg.exe"
+	_wdapp = tools_root + "\\bin\\wdapp.exe"
 
 	if FileAccess.file_exists(_makepkg) and FileAccess.file_exists(_wdapp):
 		_gdk_found = true
 		print("[GDK Export] GDK found: ", _gdk_root)
+		print("[GDK Export] Windows layout: ", _gdk_root + "\\windows")
 		print("[GDK Export] makepkg: ", _makepkg)
 		print("[GDK Export] wdapp: ", _wdapp)
 	else:
