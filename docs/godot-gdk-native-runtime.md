@@ -114,6 +114,11 @@ It currently exposes:
 - `add_user_with_ui_async()`
 - `get_primary_user()`
 - `get_users()`
+- `check_privilege_async()`
+- `resolve_privilege_with_ui_async()`
+- `resolve_issue_with_ui_async()`
+- `get_gamer_picture_async()`
+- `get_token_and_signature_async()`
 
 It emits:
 
@@ -127,8 +132,10 @@ It emits:
 - local id
 - XUID
 - gamertag
+- enum-backed age group plus a string name helper
+- enum-backed sign-in state plus a string name helper
 - guest flag
-- sign-in state
+- store-user flag
 - owned `XUserHandle`
 
 ## Achievements service
@@ -183,6 +190,8 @@ The current `add_default_user_async()` flow is the best end-to-end example of th
 15. the runtime drops its retained reference to the op
 
 That same pattern is expected to be reused by future async services.
+
+The newer XUser-facing methods now reuse that same flow as well: privilege resolution, issue resolution, gamer-picture fetches, and token/signature requests all allocate a concrete `GDKXAsyncContext`, translate native results into Godot `Dictionary` or `Image` payloads, and complete a retained `GDKAsyncOp` on the main-thread dispatch path.
 
 The current `query_player_achievements_async()` and `update_achievement_async()` paths are the complementary non-`XAsyncBlock` example:
 

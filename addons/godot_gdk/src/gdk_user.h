@@ -10,8 +10,11 @@
 
 #include <godot_cpp/classes/ref.hpp>
 #include <godot_cpp/classes/ref_counted.hpp>
+#include <godot_cpp/core/binder_common.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/array.hpp>
+#include <godot_cpp/variant/dictionary.hpp>
+#include <godot_cpp/variant/packed_byte_array.hpp>
 #include <godot_cpp/variant/string.hpp>
 
 #include <XUser.h>
@@ -26,12 +29,30 @@ class GDKRuntime;
 class GDKUser : public RefCounted {
     GDCLASS(GDKUser, RefCounted);
 
+public:
+    enum AgeGroup {
+        AGE_GROUP_UNKNOWN = 0,
+        AGE_GROUP_CHILD,
+        AGE_GROUP_TEEN,
+        AGE_GROUP_ADULT,
+    };
+
+    enum SignInState {
+        SIGN_IN_STATE_SIGNED_OUT = 0,
+        SIGN_IN_STATE_SIGNING_OUT,
+        SIGN_IN_STATE_SIGNED_IN,
+    };
+
+private:
     XUserHandle m_user_handle = nullptr;
     XUserLocalId m_local_id = {};
     String m_xuid;
     String m_gamertag;
+    AgeGroup m_age_group = AGE_GROUP_UNKNOWN;
+    SignInState m_sign_in_state = SIGN_IN_STATE_SIGNED_OUT;
     bool m_is_guest = false;
     bool m_is_signed_in = false;
+    bool m_is_store_user = false;
 
     HRESULT _populate_from_handle(XUserHandle p_user_handle);
 
@@ -45,8 +66,13 @@ public:
     int64_t get_local_id() const;
     String get_xuid() const;
     String get_gamertag() const;
+    AgeGroup get_age_group() const;
+    String get_age_group_name() const;
+    SignInState get_sign_in_state() const;
+    String get_sign_in_state_name() const;
     bool is_guest() const;
     bool is_signed_in() const;
+    bool is_store_user() const;
 
     HRESULT adopt_handle(XUserHandle p_user_handle);
     HRESULT refresh();
@@ -86,11 +112,25 @@ public:
     Ref<GDKAsyncOp> add_user_with_ui_async();
     Ref<GDKUser> get_primary_user() const;
     Array get_users() const;
+    Ref<GDKAsyncOp> check_privilege_async(const Ref<GDKUser> &p_user, int64_t p_privilege);
+    Ref<GDKAsyncOp> resolve_privilege_with_ui_async(const Ref<GDKUser> &p_user, int64_t p_privilege);
+    Ref<GDKAsyncOp> resolve_issue_with_ui_async(const Ref<GDKUser> &p_user, const String &p_url = String());
+    Ref<GDKAsyncOp> get_gamer_picture_async(const Ref<GDKUser> &p_user, const String &p_size = "medium");
+    Ref<GDKAsyncOp> get_token_and_signature_async(
+            const Ref<GDKUser> &p_user,
+            const String &p_method,
+            const String &p_url,
+            const Dictionary &p_headers = Dictionary(),
+            const PackedByteArray &p_body = PackedByteArray(),
+            bool p_force_refresh = false);
 
     void on_user_change(XUserLocalId p_user_local_id, XUserChangeEvent p_event);
     void complete_add_user(XUserHandle p_user_handle, const Ref<GDKAsyncOp> &p_op);
 };
 
 } // namespace godot
+
+VARIANT_ENUM_CAST(godot::GDKUser::AgeGroup);
+VARIANT_ENUM_CAST(godot::GDKUser::SignInState);
 
 #endif // GDK_USER_H

@@ -386,6 +386,10 @@ add_user_with_ui_async() -> GDKAsyncOp
 get_primary_user() -> GDKUser
 get_users() -> Array[GDKUser]
 check_privilege_async(user: GDKUser, privilege: int) -> GDKAsyncOp
+resolve_privilege_with_ui_async(user: GDKUser, privilege: int) -> GDKAsyncOp
+resolve_issue_with_ui_async(user: GDKUser, url := "") -> GDKAsyncOp
+get_gamer_picture_async(user: GDKUser, size := "medium") -> GDKAsyncOp
+get_token_and_signature_async(user: GDKUser, method: String, url: String, headers := {}, body := PackedByteArray(), force_refresh := false) -> GDKAsyncOp
 ```
 
 ##### Signals
@@ -403,8 +407,13 @@ primary_user_changed(user: GDKUser)
 get_local_id() -> int
 get_xuid() -> String
 get_gamertag() -> String
+get_age_group() -> GDKUser.AgeGroup
+get_age_group_name() -> String
+get_sign_in_state() -> GDKUser.SignInState
+get_sign_in_state_name() -> String
 is_guest() -> bool
 is_signed_in() -> bool
+is_store_user() -> bool
 ```
 
 ##### Native API mapping
@@ -413,9 +422,13 @@ is_signed_in() -> bool
 | --- | --- | --- |
 | `add_default_user_async()` | `XUserAddAsync`, `XUserAddResult` | Uses `XUserAddAsync` with the appropriate default-user option; on success, populate `GDKUser`, create `XblContextHandle`, and ensure change notifications are registered. |
 | `add_user_with_ui_async()` | `XUserAddAsync`, `XUserAddResult` | Uses the UI-driven add path; post-processing is the same as the default-user path. |
-| `check_privilege_async()` | `XUserCheckPrivilege` | There is no documented async privilege-check API in `XUser`; this wrapper should complete a `GDKAsyncOp` from the synchronous result and optionally guide callers toward `XUserResolvePrivilegeWithUiAsync` when remediation is needed. |
+| `check_privilege_async()` | `XUserCheckPrivilege` | There is no documented async privilege-check API in `XUser`; this wrapper should complete a `GDKAsyncOp` from the synchronous result. Successful results carry a `Dictionary` in `GDKResult.data` with `privilege`, `has_privilege`, `deny_reason`, and `deny_reason_value`. If the check returns `E_GAMEUSER_RESOLVE_USER_ISSUE_REQUIRED`, the op should fail and direct callers to `resolve_issue_with_ui_async()`. |
+| `resolve_privilege_with_ui_async()` | `XUserResolvePrivilegeWithUiAsync`, `XUserResolvePrivilegeWithUiResult` | Use the native UI remediation path when `check_privilege_async()` reports that a privilege is denied and the title wants to let the player resolve it immediately. Successful results can carry a small `Dictionary` payload that echoes the resolved privilege id. |
+| `resolve_issue_with_ui_async()` | `XUserResolveIssueWithUiAsync`, `XUserResolveIssueWithUiResult` | This is the remediation path for `E_GAMEUSER_RESOLVE_USER_ISSUE_REQUIRED` from `XUser` getters such as age-group lookups and from privilege checks. Treat an empty `url` as the Xbox services/default flow and pass a URL only when the underlying issue is request-specific. |
+| `get_gamer_picture_async()` | `XUserGetGamerPictureAsync`, `XUserGetGamerPictureResultSize`, `XUserGetGamerPictureResult` | Accept `small`, `medium`, `large`, and `extra_large` size strings. Decode the returned PNG bytes into a Godot `Image` and place that `Image` in `GDKResult.data`. |
+| `get_token_and_signature_async()` | `XUserGetTokenAndSignatureAsync`, `XUserGetTokenAndSignatureResultSize`, `XUserGetTokenAndSignatureResult` | First-pass token support should expose explicit request parameters: HTTP method, full URL, headers `Dictionary`, optional `PackedByteArray` body, and `force_refresh`. Successful results carry a `Dictionary` with `token` and `signature`. |
 | `user_changed` / `user_removed` | `XUserRegisterForChangeEvent`, `XUserUnregisterForChangeEvent` | Register one runtime-wide change callback against the shared queue and reconcile affected `GDKUser` wrappers by local id. |
-| `GDKUser` getters | `XUserGetLocalId`, `XUserGetId`, `XUserGetGamertag`, `XUserGetIsGuest`, `XUserGetState` | Pure wrapper accessors with no extra service traffic. |
+| `GDKUser` getters | `XUserGetLocalId`, `XUserGetId`, `XUserGetGamertag`, `XUserGetAgeGroup`, `XUserGetIsGuest`, `XUserGetState`, `XUserIsStoreUser` | Pure wrapper accessors with no extra service traffic. Expose age-group and sign-in state as Godot enums with bound constants on `GDKUser`, and provide `get_age_group_name()` / `get_sign_in_state_name()` for human-readable snake_case strings such as `adult` and `signed_in`. |
 
 Each `GDKUser` should own an `XUserHandle` and an `XblContextHandle`. The runtime should own a single change-event registration token. Cleanup order should be: unregister runtime change notifications, remove the user from service-owned caches/managers, close the Xbox services context, then call `XUserCloseHandle`.
 

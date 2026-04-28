@@ -17,8 +17,11 @@ const DEMO_ACHIEVEMENT_STEP := 25
 @onready var gamepad_display: RichTextLabel = $VBoxContainer/GamepadDisplay
 
 var _silent_sign_in_op = null
+var _gamer_picture_op = null
 var _achievement_query_op = null
 var _achievement_update_op = null
+var _loaded_gamer_picture_xuid := ""
+var _pending_gamer_picture_xuid := ""
 
 func _ready() -> void:
 	input_label.visible = false
@@ -64,11 +67,15 @@ func _refresh_state() -> void:
 	_refresh_achievement_ui()
 
 func _show_user(user) -> void:
+	var store_user_text: String = "yes" if user.store_user else "no"
+	var sign_in_state_text: String = user.get_sign_in_state_name()
+	var age_group_text: String = user.get_age_group_name()
 	gamertag_label.text = user.gamertag
 	xuid_label.text = "XUID: %s" % user.xuid
-	user_label.text = "User: %s" % user.gamertag
+	user_label.text = "State: %s • Age: %s • Store user: %s" % [sign_in_state_text, age_group_text, store_user_text]
 	sign_in_button.text = "User Ready"
 	sign_in_button.disabled = true
+	_load_gamer_picture(user)
 	_start_achievement_query(user)
 	_refresh_achievement_ui()
 
@@ -76,12 +83,65 @@ func _clear_user() -> void:
 	gamertag_label.text = "No active user"
 	xuid_label.text = ""
 	user_label.text = "User: Not signed in"
+	_clear_avatar()
 	if GDK.is_initialized():
 		sign_in_button.text = "Retry Silent Sign-In"
 		sign_in_button.disabled = false
 	achievement_button.text = "Update Achievement %s" % DEMO_ACHIEVEMENT_ID
 	achievement_button.disabled = true
 	achievement_label.text = "Achievement %s: sign in to load progress" % DEMO_ACHIEVEMENT_ID
+
+func _clear_avatar() -> void:
+	avatar_rect.texture = null
+	avatar_rect.visible = false
+	_loaded_gamer_picture_xuid = ""
+	_pending_gamer_picture_xuid = ""
+
+func _load_gamer_picture(user) -> void:
+	if user == null:
+		_clear_avatar()
+		return
+
+	if _loaded_gamer_picture_xuid == user.xuid and avatar_rect.texture != null:
+		avatar_rect.visible = true
+		return
+
+	if _gamer_picture_op != null and not _gamer_picture_op.is_done():
+		if _pending_gamer_picture_xuid == user.xuid:
+			return
+		_gamer_picture_op.cancel()
+
+	_pending_gamer_picture_xuid = user.xuid
+	avatar_rect.texture = null
+	avatar_rect.visible = false
+
+	var requested_xuid: String = user.xuid
+	var gamer_picture_op = GDK.users.get_gamer_picture_async(user)
+	_gamer_picture_op = gamer_picture_op
+	if gamer_picture_op.is_done():
+		_on_gamer_picture_completed(gamer_picture_op.get_result(), gamer_picture_op, requested_xuid)
+	else:
+		gamer_picture_op.completed.connect(_on_gamer_picture_completed.bind(gamer_picture_op, requested_xuid))
+
+func _on_gamer_picture_completed(result, gamer_picture_op, requested_xuid: String) -> void:
+	if gamer_picture_op != _gamer_picture_op:
+		return
+
+	_pending_gamer_picture_xuid = ""
+
+	var primary_user = GDK.users.get_primary_user()
+	if primary_user == null or primary_user.xuid != requested_xuid:
+		return
+
+	if result == null or not result.ok or result.data == null:
+		_clear_avatar()
+		return
+
+	var image: Image = result.data
+	var texture: ImageTexture = ImageTexture.create_from_image(image)
+	avatar_rect.texture = texture
+	avatar_rect.visible = texture != null
+	_loaded_gamer_picture_xuid = primary_user.xuid
 
 func _on_sign_in_pressed() -> void:
 	if _silent_sign_in_op and not _silent_sign_in_op.is_done():

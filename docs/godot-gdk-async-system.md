@@ -54,6 +54,11 @@ Current public methods:
 - `add_user_with_ui_async() -> GDKAsyncOp`
 - `get_primary_user() -> GDKUser`
 - `get_users() -> Array`
+- `check_privilege_async(user, privilege) -> GDKAsyncOp`
+- `resolve_privilege_with_ui_async(user, privilege) -> GDKAsyncOp`
+- `resolve_issue_with_ui_async(user, url := "") -> GDKAsyncOp`
+- `get_gamer_picture_async(user, size := "medium") -> GDKAsyncOp`
+- `get_token_and_signature_async(user, method, url, headers := {}, body := PackedByteArray(), force_refresh := false) -> GDKAsyncOp`
 
 Current public signals:
 
@@ -61,6 +66,19 @@ Current public signals:
 - `user_removed(local_id: int)`
 - `user_changed(user: GDKUser)`
 - `primary_user_changed(user: GDKUser)`
+
+Current `GDKUser` getters:
+
+- `get_local_id() -> int`
+- `get_xuid() -> String`
+- `get_gamertag() -> String`
+- `get_age_group() -> GDKUser.AgeGroup`
+- `get_age_group_name() -> String`
+- `get_sign_in_state() -> GDKUser.SignInState`
+- `get_sign_in_state_name() -> String`
+- `is_guest() -> bool`
+- `is_signed_in() -> bool`
+- `is_store_user() -> bool`
 
 ### `GDK.achievements`
 
@@ -117,7 +135,7 @@ Fields:
 - `message: String`
 - `data: Variant`
 
-`data` carries the operation payload. In the current implementation, successful user-add calls complete with a `GDKUser` in `data`, and successful achievement queries/updates complete with cached `GDKAchievement` data in `data`.
+`data` carries the operation payload. In the current implementation, successful user-add calls complete with a `GDKUser` in `data`, privilege and token/signature calls complete with `Dictionary` payloads, gamer-picture requests complete with a Godot `Image`, and successful achievement queries/updates complete with cached `GDKAchievement` data in `data`.
 
 ## File map
 
@@ -299,14 +317,18 @@ On successful user add:
    - local id
    - XUID
    - gamertag
+   - age group
    - guest state
    - sign-in state
+   - store-user state
 3. `GDKUsers::complete_add_user()` updates the cache and emits:
    - `user_added` or `user_changed`
    - `primary_user_changed` if needed
 4. only after those updates does it complete the `GDKAsyncOp`
 
 That ordering is important. Future services should follow the same rule: update cache first, then complete the op.
+
+The newer users-service one-shot requests (`resolve_privilege_with_ui_async()`, `resolve_issue_with_ui_async()`, `get_gamer_picture_async()`, and `get_token_and_signature_async()`) reuse that same retained `GDKAsyncOp` + `GDKXAsyncContext` pattern. The only difference is the payload translation that happens in the concrete finalizer: `Dictionary` for privilege/token results and `Image` for gamer pictures.
 
 ## Achievements service state
 

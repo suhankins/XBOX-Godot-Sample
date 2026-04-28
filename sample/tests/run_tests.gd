@@ -131,7 +131,17 @@ func _test_gdk_users_api() -> void:
 	if users == null:
 		return
 
-	for method_name in ["add_default_user_async", "add_user_with_ui_async", "get_primary_user", "get_users"]:
+	for method_name in [
+		"add_default_user_async",
+		"add_user_with_ui_async",
+		"get_primary_user",
+		"get_users",
+		"check_privilege_async",
+		"resolve_privilege_with_ui_async",
+		"resolve_issue_with_ui_async",
+		"get_gamer_picture_async",
+		"get_token_and_signature_async"
+	]:
 		_assert_has_method(users, method_name)
 
 	for signal_name in ["user_added", "user_removed", "user_changed", "primary_user_changed"]:
@@ -139,6 +149,34 @@ func _test_gdk_users_api() -> void:
 
 	_assert_true(users.get_users() is Array, "get_users() returns Array")
 	_assert_true(users.get_primary_user() == null, "get_primary_user() starts null")
+
+	var blank_user = GDKUser.new()
+	_assert_not_null(blank_user, "GDKUser.new() returns wrapper")
+	if blank_user != null:
+		for method_name in [
+			"get_local_id",
+			"get_xuid",
+			"get_gamertag",
+			"get_age_group",
+			"get_age_group_name",
+			"get_sign_in_state",
+			"get_sign_in_state_name",
+			"is_guest",
+			"is_signed_in",
+			"is_store_user"
+		]:
+			_assert_has_method(blank_user, method_name)
+
+		_assert_eq(blank_user.get_local_id(), 0, "blank GDKUser local_id defaults to 0")
+		_assert_eq(blank_user.get_xuid(), "", "blank GDKUser xuid defaults empty")
+		_assert_eq(blank_user.get_gamertag(), "", "blank GDKUser gamertag defaults empty")
+		_assert_eq(blank_user.get_age_group(), GDKUser.AGE_GROUP_UNKNOWN, "blank GDKUser age_group defaults to AGE_GROUP_UNKNOWN")
+		_assert_eq(blank_user.get_age_group_name(), "unknown", "blank GDKUser age_group_name defaults to unknown")
+		_assert_eq(blank_user.get_sign_in_state(), GDKUser.SIGN_IN_STATE_SIGNED_OUT, "blank GDKUser sign_in_state defaults to SIGN_IN_STATE_SIGNED_OUT")
+		_assert_eq(blank_user.get_sign_in_state_name(), "signed_out", "blank GDKUser sign_in_state_name defaults to signed_out")
+		_assert_eq(blank_user.is_guest(), false, "blank GDKUser guest defaults false")
+		_assert_eq(blank_user.is_signed_in(), false, "blank GDKUser signed_in defaults false")
+		_assert_eq(blank_user.is_store_user(), false, "blank GDKUser store_user defaults false")
 
 	var op = users.add_default_user_async()
 	_assert_not_null(op, "add_default_user_async() returns GDKAsyncOp")
@@ -150,6 +188,36 @@ func _test_gdk_users_api() -> void:
 		if result != null:
 			_assert_eq(result.ok, false, "immediate async error result.ok == false")
 			_assert_true(result.message.length() > 0, "immediate async error includes message")
+
+	var privilege_op = users.check_privilege_async(blank_user, 254)
+	_assert_not_null(privilege_op, "check_privilege_async() returns GDKAsyncOp")
+	if privilege_op != null:
+		_assert_true(privilege_op is GDKAsyncOp, "check_privilege_async() uses GDKAsyncOp")
+		_assert_true(privilege_op.is_done(), "uninitialized check_privilege_async() completes immediately")
+
+	var resolve_privilege_op = users.resolve_privilege_with_ui_async(blank_user, 254)
+	_assert_not_null(resolve_privilege_op, "resolve_privilege_with_ui_async() returns GDKAsyncOp")
+	if resolve_privilege_op != null:
+		_assert_true(resolve_privilege_op is GDKAsyncOp, "resolve_privilege_with_ui_async() uses GDKAsyncOp")
+		_assert_true(resolve_privilege_op.is_done(), "uninitialized resolve_privilege_with_ui_async() completes immediately")
+
+	var resolve_issue_op = users.resolve_issue_with_ui_async(blank_user)
+	_assert_not_null(resolve_issue_op, "resolve_issue_with_ui_async() returns GDKAsyncOp")
+	if resolve_issue_op != null:
+		_assert_true(resolve_issue_op is GDKAsyncOp, "resolve_issue_with_ui_async() uses GDKAsyncOp")
+		_assert_true(resolve_issue_op.is_done(), "uninitialized resolve_issue_with_ui_async() completes immediately")
+
+	var gamer_picture_op = users.get_gamer_picture_async(blank_user)
+	_assert_not_null(gamer_picture_op, "get_gamer_picture_async() returns GDKAsyncOp")
+	if gamer_picture_op != null:
+		_assert_true(gamer_picture_op is GDKAsyncOp, "get_gamer_picture_async() uses GDKAsyncOp")
+		_assert_true(gamer_picture_op.is_done(), "uninitialized get_gamer_picture_async() completes immediately")
+
+	var token_op = users.get_token_and_signature_async(blank_user, "GET", "https://example.com")
+	_assert_not_null(token_op, "get_token_and_signature_async() returns GDKAsyncOp")
+	if token_op != null:
+		_assert_true(token_op is GDKAsyncOp, "get_token_and_signature_async() uses GDKAsyncOp")
+		_assert_true(token_op.is_done(), "uninitialized get_token_and_signature_async() completes immediately")
 
 func _test_gdk_achievements_api() -> void:
 	print("\n── GDK Achievements API ──")
