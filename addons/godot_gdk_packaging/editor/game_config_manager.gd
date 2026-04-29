@@ -377,8 +377,54 @@ func launch_editor() -> int:
 	# Ensure placeholder images exist before opening the editor
 	_ensure_placeholder_images()
 
+	# Relocate any root-level logos and update config paths to storelogos/
+	# so GameConfigEditor writes directly to storelogos/ on save
+	relocate_logos_to_storelogos()
+	_rewrite_config_paths_to_storelogos()
+
 	var args := PackedStringArray([config_path])
 	var pid = _toolchain.launch_detached(_toolchain.get_game_config_editor_path(), args)
 	if pid >= 0:
 		print("[GDK Packaging] Launched GameConfigEditor (PID: ", pid, ")")
 	return pid
+
+
+## Rewrites all logo paths in MicrosoftGame.config to use storelogos/ prefix.
+## This ensures GameConfigEditor saves directly into the storelogos/ folder.
+func _rewrite_config_paths_to_storelogos() -> void:
+	var config_path = get_config_path()
+	var file = FileAccess.open(config_path, FileAccess.READ)
+	if file == null:
+		return
+	var content = file.get_as_text()
+	file.close()
+
+	var logo_attrs := [
+		"StoreLogo",
+		"Square44x44Logo",
+		"Square150x150Logo",
+		"Square480x480Logo",
+		"SplashScreenImage",
+	]
+
+	var changed := false
+	for attr in logo_attrs:
+		# Match attr="something.png" where something.png doesn't already start with storelogos
+		var regex = RegEx.new()
+		regex.compile(attr + '="(?!storelogos[/\\\\])([^"]+)"')
+		var result = regex.search(content)
+		if result:
+			var old_path = result.get_string(1)
+			var filename = old_path.replace("\\", "/").get_file()
+			var new_path = "storelogos\\" + filename
+			content = content.replace(
+				attr + '="' + old_path + '"',
+				attr + '="' + new_path + '"')
+			changed = true
+
+	if changed:
+		file = FileAccess.open(config_path, FileAccess.WRITE)
+		if file != null:
+			file.store_string(content)
+			file.close()
+			print("[GDK Packaging] Rewrote config logo paths to storelogos/")
