@@ -93,20 +93,25 @@ func _build_ui() -> void:
 	var config_btns := HBoxContainer.new()
 	root.add_child(config_btns)
 
+	_create_config_btn = Button.new()
+	_create_config_btn.text = "Create MicrosoftGame.config"
+	_create_config_btn.pressed.connect(_on_create_config)
+	config_btns.add_child(_create_config_btn)
+
 	_edit_config_btn = Button.new()
 	_edit_config_btn.text = "Edit with GameConfigEditor"
 	_edit_config_btn.pressed.connect(_on_edit_config)
 	config_btns.add_child(_edit_config_btn)
 
-	_create_config_btn = Button.new()
-	_create_config_btn.text = "Create Template"
-	_create_config_btn.pressed.connect(_on_create_config)
-	config_btns.add_child(_create_config_btn)
-
 	var refresh_btn := Button.new()
 	refresh_btn.text = "Refresh"
 	refresh_btn.pressed.connect(_refresh_config_status)
 	config_btns.add_child(refresh_btn)
+
+	var open_folder_btn := Button.new()
+	open_folder_btn.text = "Open Folder"
+	open_folder_btn.pressed.connect(_on_open_config_folder)
+	config_btns.add_child(open_folder_btn)
 
 	root.add_child(HSeparator.new())
 
@@ -292,6 +297,7 @@ func _set_actions_enabled(enabled: bool) -> void:
 	_edit_config_btn.disabled = not enabled
 
 func _log(text: String) -> void:
+	print("[GDK Packaging] ", text)
 	_output_log.text += text + "\n"
 	# Scroll to bottom
 	_output_log.set_caret_line(_output_log.get_line_count() - 1)
@@ -301,10 +307,12 @@ func _log_result(result: Dictionary) -> void:
 		_log(result["stdout"])
 	if result["stderr"] != "":
 		_log("[stderr] " + result["stderr"])
+		push_warning("[GDK Packaging] " + result["stderr"])
 	if result["exit_code"] == 0:
-		_log("✅ Completed successfully (exit code 0)")
+		_log("Completed successfully (exit code 0)")
 	else:
-		_log("❌ Failed with exit code " + str(result["exit_code"]))
+		_log("Failed with exit code " + str(result["exit_code"]))
+		push_error("[GDK Packaging] Command failed with exit code " + str(result["exit_code"]))
 
 
 # ── Config Status ───────────────────────────────────────────────────────────
@@ -346,23 +354,33 @@ func _on_auto_genmap_toggled(pressed: bool) -> void:
 
 func _on_edit_config() -> void:
 	if not _config_mgr.config_exists():
-		_log("⚠️ MicrosoftGame.config not found — create one first.")
+		_log("MicrosoftGame.config not found — create one first.")
+		push_warning("[GDK Packaging] MicrosoftGame.config not found — create one first.")
 		return
 	var pid = _config_mgr.launch_editor()
 	if pid >= 0:
 		_log("Launched GameConfigEditor (PID: %d)" % pid)
 	else:
-		_log("❌ Failed to launch GameConfigEditor")
+		_log("Failed to launch GameConfigEditor")
+		push_error("[GDK Packaging] Failed to launch GameConfigEditor")
 
 func _on_create_config() -> void:
 	var err = _config_mgr.create_template()
 	if err == OK:
-		_log("✅ Created template MicrosoftGame.config in project root")
+		_log("Created template MicrosoftGame.config in project root")
+		# Trigger Godot filesystem rescan so it appears in the FileSystem dock
+		EditorInterface.get_resource_filesystem().scan()
 		_refresh_config_status()
 	elif err == ERR_ALREADY_EXISTS:
-		_log("⚠️ MicrosoftGame.config already exists")
+		_log("MicrosoftGame.config already exists")
+		push_warning("[GDK Packaging] MicrosoftGame.config already exists")
 	else:
-		_log("❌ Failed to create MicrosoftGame.config: " + error_string(err))
+		_log("Failed to create MicrosoftGame.config: " + error_string(err))
+		push_error("[GDK Packaging] Failed to create MicrosoftGame.config: " + error_string(err))
+
+func _on_open_config_folder() -> void:
+	var folder_path = ProjectSettings.globalize_path("res://")
+	OS.shell_open(folder_path)
 
 func _on_genmap() -> void:
 	var source := _source_dir_edit.text.strip_edges()
@@ -373,7 +391,7 @@ func _on_genmap() -> void:
 	if output == "":
 		output = source
 	var map_path := output.path_join("layout.xml")
-	_log("── Generating mapping file ──")
+	_log("Generating mapping file...")
 	var result = _makepkg.genmap(source, map_path)
 	_log_result(result)
 	if result["exit_code"] == 0:
@@ -385,7 +403,7 @@ func _on_validate() -> void:
 	if source == "" or map_file == "":
 		_log("❌ Content directory and mapping file are required for validation.")
 		return
-	_log("── Validating package layout ──")
+	_log("Validating package layout...")
 	var result = _makepkg.validate(map_file, source)
 	_log_result(result)
 
@@ -402,7 +420,7 @@ func _on_pack() -> void:
 	# Auto-generate mapping file if checkbox is on
 	var map_file := _map_file_edit.text.strip_edges()
 	if _auto_genmap_check.button_pressed or map_file == "":
-		_log("── Auto-generating mapping file ──")
+		_log("Auto-generating mapping file...")
 		var map_path := output.path_join("layout.xml")
 		var genmap_result = _makepkg.genmap(source, map_path)
 		_log_result(genmap_result)
@@ -428,6 +446,6 @@ func _on_pack() -> void:
 	var updcompat_map := [3, 2, 1]
 	options["updcompat"] = updcompat_map[_updcompat_option.selected]
 
-	_log("── Creating MSIXVC package ──")
+	_log("Creating MSIXVC package...")
 	var result = _makepkg.pack(source, map_file, output, options)
 	_log_result(result)
