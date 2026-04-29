@@ -1,8 +1,8 @@
 extends Area2D
 ## Simple AI paddle that tracks the ball position with a reaction delay.
 
-const MOTION_SPEED = 150
-const REACTION_DISTANCE = 40.0
+const MOTION_SPEED = 250
+const REACTION_DISTANCE = 10.0
 
 var _motion := 0.0
 var _screen_size_y := 0.0
