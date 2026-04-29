@@ -1,8 +1,5 @@
 extends Control
 
-# Default game server port. Can be any number between 1024 and 49151.
-# Not present on the list of registered or common ports as of May 2024:
-# https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
 const DEFAULT_PORT = 8910
 
 @onready var address: LineEdit = $Address
@@ -15,17 +12,42 @@ const DEFAULT_PORT = 8910
 @onready var find_public_ip_button: LinkButton = $FindPublicIP
 
 var peer: ENetMultiplayerPeer
+var _title_hue := 0.0
 
 func _ready() -> void:
-	# Connect all the callbacks related to networking.
 	multiplayer.peer_connected.connect(_player_connected)
 	multiplayer.peer_disconnected.connect(_player_disconnected)
 	multiplayer.connected_to_server.connect(_connected_ok)
 	multiplayer.connection_failed.connect(_connected_fail)
 	multiplayer.server_disconnected.connect(_server_disconnected)
 
-#region Network callbacks from SceneTree
-# Callback from SceneTree.
+	# Dark neon background
+	var bg := get_parent().get_node_or_null("Background")
+	if bg == null:
+		bg = ColorRect.new()
+		bg.name = "Background"
+		bg.set_anchors_preset(PRESET_FULL_RECT)
+		bg.color = Color(0.05, 0.05, 0.12, 1.0)
+		bg.z_index = -1
+		get_parent().add_child(bg)
+
+	# Style the title
+	var title_label = get_parent().get_node_or_null("Title")
+	if title_label:
+		title_label.add_theme_font_size_override("font_size", 40)
+
+
+func _process(delta: float) -> void:
+	_title_hue += delta * 0.1
+	if _title_hue > 1.0:
+		_title_hue -= 1.0
+	var title_label = get_parent().get_node_or_null("Title")
+	if title_label:
+		title_label.add_theme_color_override("font_color",
+			Color.from_hsv(_title_hue, 0.7, 1.0))
+
+
+#region Network callbacks
 func _player_connected(_id: int) -> void:
 	_start_game(false)
 

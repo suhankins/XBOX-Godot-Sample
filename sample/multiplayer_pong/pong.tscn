@@ -13,7 +13,7 @@ offset_right = 640.0
 offset_bottom = 400.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.141176, 0.152941, 0.164706, 1)
+color = Color(0.05, 0.05, 0.12, 1)
 
 [node name="Separator" type="Sprite2D" parent="." unique_id=429897672]
 position = Vector2(320, 200)
@@ -29,6 +29,7 @@ modulate = Color(1, 0, 1, 1)
 position = Vector2(608.88, 188.622)
 
 [node name="Ball" parent="." unique_id=558657596 instance=ExtResource("4")]
+modulate = Color(1, 0.95, 0.4, 1)
 position = Vector2(320.387, 189.525)
 
 [node name="ScoreLeft" type="Label" parent="." unique_id=1578676044]
@@ -78,6 +79,13 @@ offset_bottom = 360.0
 size_flags_horizontal = 2
 size_flags_vertical = 2
 text = "Exit Game"
+
+[node name="SpeedLabel" type="Label" parent="."]
+offset_left = 270.0
+offset_top = 380.0
+offset_right = 370.0
+offset_bottom = 396.0
+horizontal_alignment = 1
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=26020812]
 offset = Vector2(320, 200)
