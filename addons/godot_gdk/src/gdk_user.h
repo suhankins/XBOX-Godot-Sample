@@ -6,85 +6,131 @@
 #endif
 #include <windows.h>
 
+#include <vector>
+
 #include <godot_cpp/classes/ref.hpp>
 #include <godot_cpp/classes/ref_counted.hpp>
-#include <godot_cpp/classes/object.hpp>
-#include <godot_cpp/classes/image_texture.hpp>
+#include <godot_cpp/core/binder_common.hpp>
 #include <godot_cpp/core/class_db.hpp>
+#include <godot_cpp/variant/array.hpp>
+#include <godot_cpp/variant/dictionary.hpp>
+#include <godot_cpp/variant/packed_byte_array.hpp>
 #include <godot_cpp/variant/string.hpp>
 
 #include <XUser.h>
-#include <XTaskQueue.h>
 
 namespace godot {
 
-// Opaque wrapper around XUserHandle — never exposes raw handle to GDScript
-class GDKUserInfo : public RefCounted {
-    GDCLASS(GDKUserInfo, RefCounted);
+class GDK;
+class GDKAsyncOp;
+class GDKResult;
+class GDKRuntime;
 
+class GDKUser : public RefCounted {
+    GDCLASS(GDKUser, RefCounted);
+
+public:
+    enum AgeGroup {
+        AGE_GROUP_UNKNOWN = 0,
+        AGE_GROUP_CHILD,
+        AGE_GROUP_TEEN,
+        AGE_GROUP_ADULT,
+    };
+
+    enum SignInState {
+        SIGN_IN_STATE_SIGNED_OUT = 0,
+        SIGN_IN_STATE_SIGNING_OUT,
+        SIGN_IN_STATE_SIGNED_IN,
+    };
+
+private:
     XUserHandle m_user_handle = nullptr;
+    XUserLocalId m_local_id = {};
+    String m_xuid;
     String m_gamertag;
-    uint64_t m_xuid = 0;
-    bool m_handle_owned = false; // tracks if we own the handle (for duplication)
+    AgeGroup m_age_group = AGE_GROUP_UNKNOWN;
+    SignInState m_sign_in_state = SIGN_IN_STATE_SIGNED_OUT;
+    bool m_is_guest = false;
+    bool m_is_signed_in = false;
+    bool m_is_store_user = false;
+
+    HRESULT _populate_from_handle(XUserHandle p_user_handle);
 
 protected:
     static void _bind_methods();
 
 public:
-    GDKUserInfo();
-    ~GDKUserInfo();
+    GDKUser();
+    ~GDKUser();
 
-    // Internal: takes ownership of handle (will close on destruction)
-    void set_from_handle(XUserHandle handle);
-    // Internal: duplicate handle for safe sharing
-    XUserHandle get_handle() const { return m_user_handle; }
-
+    int64_t get_local_id() const;
+    String get_xuid() const;
     String get_gamertag() const;
-    uint64_t get_xuid() const;
-    bool is_valid() const;
-    void invalidate();
+    AgeGroup get_age_group() const;
+    String get_age_group_name() const;
+    SignInState get_sign_in_state() const;
+    String get_sign_in_state_name() const;
+    bool is_guest() const;
+    bool is_signed_in() const;
+    bool is_store_user() const;
+
+    HRESULT adopt_handle(XUserHandle p_user_handle);
+    HRESULT refresh();
+    bool matches_local_id(XUserLocalId p_user_local_id) const;
+    XUserHandle get_handle() const;
+    void clear();
 };
 
-// Singleton managing user sign-in lifecycle
-class GDKUserManager : public Object {
-    GDCLASS(GDKUserManager, Object);
+class GDKUsers : public RefCounted {
+    GDCLASS(GDKUsers, RefCounted);
 
-    static GDKUserManager *singleton;
-    Ref<GDKUserInfo> m_current_user;
-    bool m_sign_in_pending = false;
-    bool m_silent_attempt = false; // tracks if current attempt was silent (for fallback)
-    bool m_picture_pending = false;
+    GDK *m_owner = nullptr;
+    std::vector<Ref<GDKUser>> m_users;
+    Ref<GDKUser> m_primary_user;
+    bool m_runtime_ready = false;
+    bool m_change_event_registered = false;
     XTaskQueueRegistrationToken m_change_token = {};
-    bool m_change_registered = false;
 
-    void _store_user(Ref<GDKUserInfo> user);
-    void _clear_user();
-    void _register_change_event();
-    void _unregister_change_event();
+    static void CALLBACK _user_change_callback(void *p_context, XUserLocalId p_user_local_id, XUserChangeEvent p_event);
+
+    GDKRuntime *_get_runtime() const;
+    Ref<GDKAsyncOp> _start_add_user_async(XUserAddOptions p_options, const String &p_action);
+    bool _upsert_user(const Ref<GDKUser> &p_user);
+    Ref<GDKUser> _find_user_by_local_id(XUserLocalId p_user_local_id) const;
+    void _remove_user_by_local_id(XUserLocalId p_user_local_id);
 
 protected:
     static void _bind_methods();
 
 public:
-    static GDKUserManager *get_singleton();
+    void set_owner(GDK *p_owner);
 
-    GDKUserManager();
-    ~GDKUserManager();
+    Ref<GDKResult> on_runtime_initialized();
+    void shutdown();
 
-    void sign_in();
-    void sign_in_silently();
-    void sign_out();
-    void get_gamer_picture();
-    Ref<GDKUserInfo> get_current_user() const;
-    bool is_signed_in() const;
-    bool is_sign_in_pending() const;
+    Ref<GDKAsyncOp> add_default_user_async(bool p_allow_guests = false);
+    Ref<GDKAsyncOp> add_user_with_ui_async();
+    Ref<GDKUser> get_primary_user() const;
+    Array get_users() const;
+    Ref<GDKAsyncOp> check_privilege_async(const Ref<GDKUser> &p_user, int64_t p_privilege);
+    Ref<GDKAsyncOp> resolve_privilege_with_ui_async(const Ref<GDKUser> &p_user, int64_t p_privilege);
+    Ref<GDKAsyncOp> resolve_issue_with_ui_async(const Ref<GDKUser> &p_user, const String &p_url = String());
+    Ref<GDKAsyncOp> get_gamer_picture_async(const Ref<GDKUser> &p_user, const String &p_size = "medium");
+    Ref<GDKAsyncOp> get_token_and_signature_async(
+            const Ref<GDKUser> &p_user,
+            const String &p_method,
+            const String &p_url,
+            const Dictionary &p_headers = Dictionary(),
+            const PackedByteArray &p_body = PackedByteArray(),
+            bool p_force_refresh = false);
 
-    // Called from async callbacks (main thread via task queue)
-    void _on_sign_in_complete(XUserHandle handle, HRESULT hr, bool was_silent);
-    void _on_gamer_picture_complete(XAsyncBlock *async);
-    void _on_user_change(XUserLocalId user_local_id, XUserChangeEvent event);
+    void on_user_change(XUserLocalId p_user_local_id, XUserChangeEvent p_event);
+    void complete_add_user(XUserHandle p_user_handle, const Ref<GDKAsyncOp> &p_op);
 };
 
 } // namespace godot
+
+VARIANT_ENUM_CAST(godot::GDKUser::AgeGroup);
+VARIANT_ENUM_CAST(godot::GDKUser::SignInState);
 
 #endif // GDK_USER_H

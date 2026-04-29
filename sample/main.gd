@@ -1,259 +1,574 @@
 extends Control
-## Main demo scene — shows GDK status, user info, and full gamepad visualizer.
+## Minimal demo scene for the runtime/users/achievements baseline.
+
+const DEMO_ACHIEVEMENT_ID := "1"
+const DEMO_ACHIEVEMENT_STEP := 25
+const DEMO_MPA_CONNECTION_STRING := "godot-gdk-demo://sample-session"
+const DEMO_MPA_GROUP_ID := "sample-mpa-group"
+const DEMO_MPA_MAX_PLAYERS := 4
+const DEMO_MPA_CURRENT_PLAYERS := 1
 
 @onready var status_label: Label = $VBoxContainer/StatusLabel
 @onready var user_label: Label = $VBoxContainer/UserLabel
 @onready var gamertag_label: Label = $VBoxContainer/UserPanel/UserHBox/GamertagLabel
 @onready var xuid_label: Label = $VBoxContainer/UserPanel/UserHBox/XuidLabel
 @onready var avatar_rect: TextureRect = $VBoxContainer/UserPanel/UserHBox/AvatarRect
-@onready var input_label: Label = $VBoxContainer/InputLabel
 @onready var sign_in_button: Button = $VBoxContainer/SignInButton
-@onready var haptics_toggle: CheckButton = $VBoxContainer/HapticsToggle
+@onready var mpa_set_button: Button = $VBoxContainer/MpaSetActivityButton
+@onready var mpa_clear_button: Button = $VBoxContainer/MpaClearActivityButton
+@onready var mpa_invite_ui_button: Button = $VBoxContainer/MpaInviteUiButton
 @onready var achievement_button: Button = $VBoxContainer/AchievementButton
 @onready var achievement_label: Label = $VBoxContainer/AchievementLabel
-@onready var gamepad_display: RichTextLabel = $VBoxContainer/GamepadDisplay
+@onready var mpa_label: RichTextLabel = $VBoxContainer/MpaLabel
 
-# ── Haptics state ───────────────────────────────────────────────
-var haptics_enabled := false
-var jolt_timer := 0.0
-var x_was_pressed := false
-var a_was_pressed := false
-const JOLT_DURATION := 0.15
-
-# ── Config ──────────────────────────────────────────────────────
-var demo_achievement_id := "1"
+var _silent_sign_in_op = null
+var _gamer_picture_op = null
+var _achievement_query_op = null
+var _achievement_update_op = null
+var _mpa_set_op = null
+var _mpa_delete_op = null
+var _mpa_invite_ui_op = null
+var _loaded_gamer_picture_xuid := ""
+var _pending_gamer_picture_xuid := ""
+var _last_mpa_event_text := "No invite events yet."
 
 func _ready() -> void:
-	# Load config
-	var cfg := ConfigFile.new()
-	if cfg.load("res://sample_config.cfg") == OK:
-		demo_achievement_id = cfg.get_value("achievements", "demo_achievement_id", "1")
+	achievement_button.visible = true
+	achievement_label.visible = true
+	avatar_rect.visible = false
+	user_label.visible = true
 
 	sign_in_button.pressed.connect(_on_sign_in_pressed)
-	haptics_toggle.toggled.connect(_on_haptics_toggled)
+	mpa_set_button.pressed.connect(_on_mpa_set_pressed)
+	mpa_clear_button.pressed.connect(_on_mpa_clear_pressed)
+	mpa_invite_ui_button.pressed.connect(_on_mpa_invite_ui_pressed)
 	achievement_button.pressed.connect(_on_achievement_pressed)
 
-	# Give the haptics toggle initial focus so gamepad can reach it immediately
-	haptics_toggle.grab_focus()
+	var gdk = GDKBootstrap.get_gdk()
+	if gdk != null:
+		gdk.initialized.connect(_on_runtime_initialized)
+		gdk.shutdown_completed.connect(_on_runtime_shutdown)
+		gdk.runtime_error.connect(_on_runtime_error)
+		gdk.users.user_added.connect(_on_user_added)
+		gdk.users.user_changed.connect(_on_user_changed)
+		gdk.users.user_removed.connect(_on_user_removed)
+		gdk.users.primary_user_changed.connect(_on_primary_user_changed)
+		gdk.achievements.achievements_updated.connect(_on_achievements_updated)
+		gdk.achievements.achievement_unlocked.connect(_on_achievement_unlocked)
+		gdk.multiplayer_activity.activities_updated.connect(_on_mpa_activities_updated)
+		gdk.multiplayer_activity.pending_invite_received.connect(_on_pending_invite_received)
+		gdk.multiplayer_activity.invite_accepted.connect(_on_invite_accepted)
 
-	# Read initial state (signals may have fired before we connected)
-	if GDK.is_initialized():
-		status_label.text = "GDK: Initialized ✓"
-	input_label.text = "Controllers: %d" % GDKInput.get_connected_device_count()
-	if GDKUser.is_signed_in():
-		var user = GDKUser.get_current_user()
-		if user:
-			_show_user(user)
-			sign_in_button.disabled = true
-			sign_in_button.text = "Signed In"
-			GDKUser.get_gamer_picture()
-			if GDKAchievements.is_initialized():
-				GDKAchievements.check_achievement(demo_achievement_id)
+	_refresh_state()
 
-	GDK.connect("initialized", func():
+func _refresh_state() -> void:
+	var gdk = GDKBootstrap.get_gdk()
+	if gdk != null and gdk.is_initialized():
 		status_label.text = "GDK: Initialized ✓"
-	)
-	GDK.connect("error_occurred", func(msg):
-		status_label.text = "GDK Error: " + msg
-	)
-	GDKUser.connect("user_signed_in", func(user):
-		_show_user(user)
-		sign_in_button.disabled = true
-		sign_in_button.text = "Signed In"
-		GDKUser.get_gamer_picture()
-		# Check if achievement is already unlocked before enabling button
-		if GDKAchievements.is_initialized():
-			GDKAchievements.check_achievement(demo_achievement_id)
-	)
-	GDKUser.connect("sign_in_failed", func(error):
-		gamertag_label.text = "Sign-in failed"
-		xuid_label.text = ""
 		sign_in_button.disabled = false
-	)
-	GDKUser.connect("gamer_picture_loaded", func(texture):
-		avatar_rect.texture = texture
-		avatar_rect.visible = true
-	)
-	GDKAchievements.connect("achievement_unlocked", func(id):
-		achievement_label.text = "✅ Achievement unlocked!"
-		achievement_button.text = "🏆 Achievement Unlocked!"
-		achievement_button.disabled = true
-	)
-	GDKAchievements.connect("achievement_update_failed", func(id, error):
-		achievement_label.text = "❌ " + error
-		achievement_button.disabled = false
-	)
-	GDKAchievements.connect("achievement_checked", func(id, is_unlocked):
-		if is_unlocked:
-			achievement_button.text = "🏆 Already Unlocked"
-			achievement_button.disabled = true
-			achievement_label.text = "Achievement previously earned"
-		else:
-			achievement_button.disabled = false
-	)
-	GDKInput.connect("device_connected", func(id):
-		input_label.text = "Controllers: %d" % GDKInput.get_connected_device_count()
-	)
-	GDKInput.connect("device_disconnected", func(id):
-		input_label.text = "Controllers: %d" % GDKInput.get_connected_device_count()
-	)
+	elif gdk != null:
+		status_label.text = "GDK: Not initialized"
+		sign_in_button.disabled = true
+	else:
+		status_label.text = "GDK: Extension not loaded"
+		sign_in_button.disabled = true
 
-# Intercept joypad A so the CheckButton doesn't double-toggle from
-# Godot's native joypad driver AND our GameInput injection.
-func _input(event: InputEvent) -> void:
-	if event is InputEventJoypadButton and event.button_index == JOY_BUTTON_A:
-		get_viewport().set_input_as_handled()
+	var user = gdk.users.get_primary_user() if gdk != null else null
+	if user:
+		_show_user(user)
+		sign_in_button.text = "User Ready"
+		sign_in_button.disabled = true
+	else:
+		_clear_user()
+		sign_in_button.text = "Retry Silent Sign-In"
+
+	_refresh_achievement_ui()
+	_refresh_mpa_ui()
 
 func _show_user(user) -> void:
-	gamertag_label.text = user.gamertag if user.gamertag else "Unknown"
-	xuid_label.text = "XUID: %d" % user.xuid
-
-func _on_sign_in_pressed() -> void:
+	var store_user_text: String = "yes" if user.store_user else "no"
+	var sign_in_state_text: String = user.get_sign_in_state_name()
+	var age_group_text: String = user.get_age_group_name()
+	gamertag_label.text = user.gamertag
+	xuid_label.text = "XUID: %s" % user.xuid
+	user_label.text = "State: %s • Age: %s • Store user: %s" % [sign_in_state_text, age_group_text, store_user_text]
+	sign_in_button.text = "User Ready"
 	sign_in_button.disabled = true
-	sign_in_button.text = "Signing in..."
-	GDKUser.sign_in()
+	_load_gamer_picture(user)
+	_start_achievement_query(user)
+	_refresh_achievement_ui()
+	_refresh_mpa_ui()
 
-func _on_achievement_pressed() -> void:
+func _clear_user() -> void:
+	gamertag_label.text = "No active user"
+	xuid_label.text = ""
+	user_label.text = "User: Not signed in"
+	_clear_avatar()
+	var gdk = GDKBootstrap.get_gdk()
+	if gdk != null and gdk.is_initialized():
+		sign_in_button.text = "Retry Silent Sign-In"
+		sign_in_button.disabled = false
+	achievement_button.text = "Update Achievement %s" % DEMO_ACHIEVEMENT_ID
 	achievement_button.disabled = true
-	achievement_button.text = "Unlocking..."
-	achievement_label.text = ""
-	GDKAchievements.unlock(demo_achievement_id)
+	achievement_label.text = "Achievement %s: sign in to load progress" % DEMO_ACHIEVEMENT_ID
+	_refresh_mpa_ui()
 
-func _on_haptics_toggled(enabled: bool) -> void:
-	haptics_enabled = enabled
-	if not enabled and GDKInput.get_connected_device_count() > 0:
-		GDKInput.stop_rumble(0)
+func _clear_avatar() -> void:
+	avatar_rect.texture = null
+	avatar_rect.visible = false
+	_loaded_gamer_picture_xuid = ""
+	_pending_gamer_picture_xuid = ""
 
-# ── Gamepad Visualizer ──────────────────────────────────────────
-
-const BUTTON_NAMES := {
-	JOY_BUTTON_A: "A",
-	JOY_BUTTON_B: "B",
-	JOY_BUTTON_X: "X",
-	JOY_BUTTON_Y: "Y",
-	JOY_BUTTON_LEFT_SHOULDER: "LB",
-	JOY_BUTTON_RIGHT_SHOULDER: "RB",
-	JOY_BUTTON_LEFT_STICK: "LS",
-	JOY_BUTTON_RIGHT_STICK: "RS",
-	JOY_BUTTON_BACK: "View",
-	JOY_BUTTON_START: "Menu",
-	JOY_BUTTON_DPAD_UP: "D↑",
-	JOY_BUTTON_DPAD_DOWN: "D↓",
-	JOY_BUTTON_DPAD_LEFT: "D←",
-	JOY_BUTTON_DPAD_RIGHT: "D→",
-	JOY_BUTTON_GUIDE: "Xbox",
-}
-
-func _btn(joy: int, btn: JoyButton) -> String:
-	var name: String = BUTTON_NAMES.get(btn, "?")
-	if Input.is_joy_button_pressed(joy, btn):
-		return "[color=lime][b]%s[/b][/color]" % name
-	return "[color=gray]%s[/color]" % name
-
-func _axis_bar(value: float, width: int = 10) -> String:
-	var center := width / 2
-	var pos := int(clampf((value + 1.0) * 0.5 * width, 0, width))
-	var bar := ""
-	for i in range(width + 1):
-		if i == pos:
-			bar += "[color=lime]█[/color]"
-		elif i == center:
-			bar += "[color=gray]│[/color]"
-		else:
-			bar += "[color=gray]·[/color]"
-	return bar
-
-func _trigger_bar(value: float, width: int = 10) -> String:
-	var filled := int(clampf(value * width, 0, width))
-	var bar := ""
-	for i in range(width):
-		if i < filled:
-			bar += "[color=lime]█[/color]"
-		else:
-			bar += "[color=gray]·[/color]"
-	return bar
-
-func _process(_delta: float) -> void:
-	if GDKInput.get_connected_device_count() == 0:
-		gamepad_display.text = "[center][color=gray]No controller connected\nPlug in an Xbox controller via USB or Bluetooth[/color][/center]"
+func _load_gamer_picture(user) -> void:
+	if user == null:
+		_clear_avatar()
 		return
 
-	var joy := 0
+	if _loaded_gamer_picture_xuid == user.xuid and avatar_rect.texture != null:
+		avatar_rect.visible = true
+		return
 
-	# A-button → toggle haptics (edge-detected, immune to double-events)
-	var a_pressed := Input.is_joy_button_pressed(joy, JOY_BUTTON_A)
-	if a_pressed and not a_was_pressed and haptics_toggle.has_focus():
-		haptics_toggle.button_pressed = !haptics_toggle.button_pressed
-		_on_haptics_toggled(haptics_toggle.button_pressed)
-	a_was_pressed = a_pressed
+	if _gamer_picture_op != null and not _gamer_picture_op.is_done():
+		if _pending_gamer_picture_xuid == user.xuid:
+			return
+		_gamer_picture_op.cancel()
 
-	var lx := Input.get_joy_axis(joy, JOY_AXIS_LEFT_X)
-	var ly := Input.get_joy_axis(joy, JOY_AXIS_LEFT_Y)
-	var rx := Input.get_joy_axis(joy, JOY_AXIS_RIGHT_X)
-	var ry := Input.get_joy_axis(joy, JOY_AXIS_RIGHT_Y)
-	var lt := Input.get_joy_axis(joy, JOY_AXIS_TRIGGER_LEFT)
-	var rt := Input.get_joy_axis(joy, JOY_AXIS_TRIGGER_RIGHT)
+	_pending_gamer_picture_xuid = user.xuid
+	avatar_rect.texture = null
+	avatar_rect.visible = false
 
-	var t := ""
+	var requested_xuid: String = user.xuid
+	var gdk = GDKBootstrap.get_gdk()
+	if gdk == null:
+		_clear_avatar()
+		return
 
-	# Header
-	var joy_name := Input.get_joy_name(joy)
-	if joy_name.is_empty():
-		joy_name = "Xbox Controller"
-	t += "[b]%s (Joy %d)[/b]\n\n" % [joy_name, joy]
+	var gamer_picture_op = gdk.users.get_gamer_picture_async(user)
+	_gamer_picture_op = gamer_picture_op
+	if gamer_picture_op.is_done():
+		_on_gamer_picture_completed(gamer_picture_op.get_result(), gamer_picture_op, requested_xuid)
+	else:
+		gamer_picture_op.completed.connect(_on_gamer_picture_completed.bind(gamer_picture_op, requested_xuid))
 
-	# Shoulders & Triggers
-	t += "  %s                            %s\n" % [_btn(joy, JOY_BUTTON_LEFT_SHOULDER), _btn(joy, JOY_BUTTON_RIGHT_SHOULDER)]
-	t += "  LT [%s] %4.1f     RT [%s] %4.1f\n\n" % [_trigger_bar(lt, 8), lt, _trigger_bar(rt, 8), rt]
+func _on_gamer_picture_completed(result, gamer_picture_op, requested_xuid: String) -> void:
+	if gamer_picture_op != _gamer_picture_op:
+		return
 
-	# Face buttons + D-Pad layout
-	t += "       %s                    %s\n" % [_btn(joy, JOY_BUTTON_DPAD_UP), _btn(joy, JOY_BUTTON_Y)]
-	t += "    %s    %s    %s  %s     %s    %s\n" % [
-		_btn(joy, JOY_BUTTON_DPAD_LEFT), _btn(joy, JOY_BUTTON_DPAD_RIGHT),
-		_btn(joy, JOY_BUTTON_BACK), _btn(joy, JOY_BUTTON_START),
-		_btn(joy, JOY_BUTTON_X), _btn(joy, JOY_BUTTON_B)]
-	t += "       %s                    %s\n\n" % [_btn(joy, JOY_BUTTON_DPAD_DOWN), _btn(joy, JOY_BUTTON_A)]
+	_pending_gamer_picture_xuid = ""
 
-	# Sticks
-	var l_mag := sqrt(lx * lx + ly * ly)
-	var r_mag := sqrt(rx * rx + ry * ry)
-	t += "  Left Stick  %s  mag %4.2f\n" % [_btn(joy, JOY_BUTTON_LEFT_STICK), l_mag]
-	t += "    X [%s] %+5.2f\n" % [_axis_bar(lx), lx]
-	t += "    Y [%s] %+5.2f\n\n" % [_axis_bar(ly), ly]
-	t += "  Right Stick %s  mag %4.2f\n" % [_btn(joy, JOY_BUTTON_RIGHT_STICK), r_mag]
-	t += "    X [%s] %+5.2f\n" % [_axis_bar(rx), rx]
-	t += "    Y [%s] %+5.2f\n\n" % [_axis_bar(ry), ry]
+	var gdk = GDKBootstrap.get_gdk()
+	var primary_user = gdk.users.get_primary_user() if gdk != null else null
+	if primary_user == null or primary_user.xuid != requested_xuid:
+		return
 
-	# Guide button
-	t += "  %s\n" % _btn(joy, JOY_BUTTON_GUIDE)
+	if result == null or not result.ok or result.data == null:
+		_clear_avatar()
+		return
 
-	# Haptics status
-	if haptics_enabled:
-		var x_pressed := Input.is_joy_button_pressed(joy, JOY_BUTTON_X)
+	var image: Image = result.data
+	var texture: ImageTexture = ImageTexture.create_from_image(image)
+	avatar_rect.texture = texture
+	avatar_rect.visible = texture != null
+	_loaded_gamer_picture_xuid = primary_user.xuid
 
-		# Detect X press edge → start jolt
-		if x_pressed and not x_was_pressed:
-			jolt_timer = JOLT_DURATION
-		x_was_pressed = x_pressed
+func _on_sign_in_pressed() -> void:
+	if _silent_sign_in_op and not _silent_sign_in_op.is_done():
+		return
 
-		# Tick jolt timer
-		if jolt_timer > 0.0:
-			jolt_timer -= _delta
+	var gdk = GDKBootstrap.get_gdk()
+	if gdk == null:
+		status_label.text = "GDK: Extension not loaded"
+		return
 
-		# Compute rumble values
-		var low_freq := 0.0
-		var high_freq := 0.0
-		if jolt_timer > 0.0:
-			low_freq = 0.8
-			high_freq = 1.0
+	status_label.text = "GDK: Attempting silent sign-in..."
+	sign_in_button.disabled = true
+	sign_in_button.text = "Silent sign-in..."
 
-		var rt_rumble := rt  # proportional to right trigger pull
-		GDKInput.set_rumble(joy, low_freq, high_freq, 0.0, rt_rumble)
+	_silent_sign_in_op = gdk.users.add_default_user_async()
+	if _silent_sign_in_op == null:
+		status_label.text = "GDK: Silent sign-in could not start"
+		sign_in_button.text = "Retry Silent Sign-In"
+		sign_in_button.disabled = false
+		_refresh_achievement_ui()
+		return
 
-		t += "\n  [color=yellow][b]Haptics ON[/b][/color]"
-		if jolt_timer > 0.0:
-			t += "  [color=lime]JOLT![/color]"
-		if rt > 0.05:
-			t += "  RT rumble: [color=lime]%3.0f%%[/color]" % (rt * 100.0)
+	if _silent_sign_in_op.is_done():
+		_on_sign_in_completed(_silent_sign_in_op.get_result())
+	else:
+		_silent_sign_in_op.completed.connect(_on_sign_in_completed)
 
-	gamepad_display.text = t
+func _on_sign_in_completed(result) -> void:
+	if result == null:
+		status_label.text = "GDK: Silent sign-in could not start"
+		sign_in_button.text = "Retry Silent Sign-In"
+		sign_in_button.disabled = false
+		_refresh_achievement_ui()
+		return
+
+	if result.ok and result.data:
+		status_label.text = "GDK: User ready ✓"
+		_show_user(result.data)
+	else:
+		status_label.text = "GDK: Silent sign-in unavailable: %s" % result.message
+		sign_in_button.text = "Retry Silent Sign-In"
+		sign_in_button.disabled = false
+		_refresh_achievement_ui()
+
+func _on_runtime_initialized() -> void:
+	var gdk = GDKBootstrap.get_gdk()
+	status_label.text = "GDK: Initialized ✓"
+	if gdk != null and not gdk.users.get_primary_user():
+		sign_in_button.text = "Retry Silent Sign-In"
+		sign_in_button.disabled = false
+	_refresh_achievement_ui()
+	_refresh_mpa_ui()
+
+func _on_runtime_shutdown() -> void:
+	status_label.text = "GDK: Shut down"
+	_clear_user()
+	sign_in_button.disabled = true
+
+func _on_runtime_error(result) -> void:
+	var gdk = GDKBootstrap.get_gdk()
+	status_label.text = "GDK Error: %s" % result.message
+	if gdk != null and not gdk.users.get_primary_user():
+		sign_in_button.text = "Retry Silent Sign-In"
+		sign_in_button.disabled = false
+	_refresh_achievement_ui()
+	_refresh_mpa_ui()
+
+func _on_user_added(user) -> void:
+	_show_user(user)
+
+func _on_user_changed(user) -> void:
+	_show_user(user)
+
+func _on_user_removed(local_id: int) -> void:
+	status_label.text = "GDK: User %d removed" % local_id
+	_clear_user()
+
+func _on_primary_user_changed(user) -> void:
+	if user:
+		_show_user(user)
+	else:
+		_clear_user()
+
+func _is_primary_user(user) -> bool:
+	var gdk = GDKBootstrap.get_gdk()
+	var primary_user = gdk.users.get_primary_user() if gdk != null else null
+	return user != null and primary_user != null and user.local_id == primary_user.local_id
+
+func _find_cached_achievement(user, achievement_id: String):
+	var gdk = GDKBootstrap.get_gdk()
+	if gdk == null:
+		return null
+
+	for achievement in gdk.achievements.get_cached_achievements(user):
+		if achievement.id == achievement_id:
+			return achievement
+	return null
+
+func _refresh_achievement_ui() -> void:
+	var gdk = GDKBootstrap.get_gdk()
+	var query_in_progress: bool = _achievement_query_op != null and not _achievement_query_op.is_done()
+	var update_in_progress: bool = _achievement_update_op != null and not _achievement_update_op.is_done()
+
+	if gdk == null:
+		achievement_button.text = "Update Achievement %s" % DEMO_ACHIEVEMENT_ID
+		achievement_button.disabled = true
+		achievement_label.text = "Achievement %s: extension not loaded" % DEMO_ACHIEVEMENT_ID
+		return
+
+	if not gdk.is_initialized():
+		achievement_button.text = "Update Achievement %s" % DEMO_ACHIEVEMENT_ID
+		achievement_button.disabled = true
+		achievement_label.text = "Achievement %s: GDK not initialized" % DEMO_ACHIEVEMENT_ID
+		return
+
+	var user = gdk.users.get_primary_user()
+	if user == null:
+		achievement_button.text = "Update Achievement %s" % DEMO_ACHIEVEMENT_ID
+		achievement_button.disabled = true
+		achievement_label.text = "Achievement %s: sign in to load progress" % DEMO_ACHIEVEMENT_ID
+		return
+
+	var achievement = _find_cached_achievement(user, DEMO_ACHIEVEMENT_ID)
+	if achievement != null:
+		achievement_label.text = "Achievement %s: %s (%d%%)" % [
+			DEMO_ACHIEVEMENT_ID,
+			achievement.progress_state,
+			achievement.progress_percent
+		]
+		if achievement.unlocked:
+			achievement_button.text = "Achievement %s Unlocked" % DEMO_ACHIEVEMENT_ID
+			achievement_button.disabled = true
+		else:
+			var next_progress: int = mini(100, int(achievement.progress_percent) + DEMO_ACHIEVEMENT_STEP)
+			achievement_button.text = "Update Achievement %s to %d%%" % [DEMO_ACHIEVEMENT_ID, next_progress]
+			achievement_button.disabled = query_in_progress or update_in_progress
+		return
+
+	if query_in_progress:
+		achievement_button.text = "Loading Achievement %s..." % DEMO_ACHIEVEMENT_ID
+		achievement_button.disabled = true
+		achievement_label.text = "Achievement %s: syncing current progress..." % DEMO_ACHIEVEMENT_ID
+		return
+
+	achievement_button.text = "Update Achievement %s to %d%%" % [DEMO_ACHIEVEMENT_ID, DEMO_ACHIEVEMENT_STEP]
+	achievement_button.disabled = update_in_progress
+	achievement_label.text = "Achievement %s: no cached progress yet" % DEMO_ACHIEVEMENT_ID
+
+func _format_mpa_activity(activity) -> String:
+	if activity == null:
+		return "No cached activity."
+
+	var max_players = int(activity.max_players)
+	var current_players = int(activity.current_players)
+	var player_text = "%d/%d players" % [current_players, max_players] if max_players > 0 else "%d players" % current_players
+	var restriction_text = activity.join_restriction if activity.join_restriction != "" else "unknown"
+	var group_text = activity.group_id if activity.group_id != "" else "no-group"
+	return "Activity ready • %s • %s • %s" % [player_text, restriction_text, group_text]
+
+func _format_invite_event(invite) -> String:
+	if typeof(invite) != TYPE_DICTIONARY:
+		return "Unknown invite event"
+
+	var action = String(invite.get("action", "unknown"))
+	if action == "invite_handle_accept":
+		return "invite from %s to %s" % [
+			String(invite.get("sender_xuid", "?")),
+			String(invite.get("invited_xuid", "?"))
+		]
+	if action == "activity_handle_join":
+		return "join from %s to %s" % [
+			String(invite.get("joiner_xuid", "?")),
+			String(invite.get("joinee_xuid", "?"))
+		]
+
+	return String(invite.get("raw_uri", "Unknown invite event"))
+
+func _refresh_mpa_ui() -> void:
+	var gdk = GDKBootstrap.get_gdk()
+	var set_in_progress = _mpa_set_op != null and not _mpa_set_op.is_done()
+	var delete_in_progress = _mpa_delete_op != null and not _mpa_delete_op.is_done()
+	var invite_ui_in_progress = _mpa_invite_ui_op != null and not _mpa_invite_ui_op.is_done()
+
+	if gdk == null:
+		mpa_set_button.disabled = true
+		mpa_clear_button.disabled = true
+		mpa_invite_ui_button.disabled = true
+		mpa_label.text = "MPA: extension not loaded\nInvite events: %s" % _last_mpa_event_text
+		return
+
+	if not gdk.is_initialized():
+		mpa_set_button.disabled = true
+		mpa_clear_button.disabled = true
+		mpa_invite_ui_button.disabled = true
+		mpa_label.text = "MPA: GDK not initialized\nInvite events: %s" % _last_mpa_event_text
+		return
+
+	var user = gdk.users.get_primary_user()
+	if user == null:
+		mpa_set_button.disabled = true
+		mpa_clear_button.disabled = true
+		mpa_invite_ui_button.disabled = true
+		mpa_label.text = "MPA: sign in to create an activity\nInvite events: %s" % _last_mpa_event_text
+		return
+
+	var activity = gdk.multiplayer_activity.get_cached_activity(user.xuid)
+	mpa_set_button.disabled = set_in_progress or delete_in_progress
+	mpa_clear_button.disabled = activity == null or set_in_progress or delete_in_progress
+	mpa_invite_ui_button.disabled = activity == null or set_in_progress or delete_in_progress or invite_ui_in_progress
+
+	if set_in_progress:
+		mpa_label.text = "MPA: setting local activity...\nInvite events: %s" % _last_mpa_event_text
+		return
+	if delete_in_progress:
+		mpa_label.text = "MPA: clearing local activity...\nInvite events: %s" % _last_mpa_event_text
+		return
+	if invite_ui_in_progress:
+		mpa_label.text = "MPA: waiting for invite UI...\nInvite events: %s" % _last_mpa_event_text
+		return
+
+	mpa_label.text = "MPA: %s\nInvite events: %s" % [_format_mpa_activity(activity), _last_mpa_event_text]
+
+func _on_mpa_set_pressed() -> void:
+	if _mpa_set_op != null and not _mpa_set_op.is_done():
+		return
+
+	var gdk = GDKBootstrap.get_gdk()
+	if gdk == null:
+		return
+
+	var user = gdk.users.get_primary_user()
+	if user == null:
+		return
+
+	_mpa_set_op = gdk.multiplayer_activity.set_activity_async(
+		user,
+		DEMO_MPA_CONNECTION_STRING,
+		"followed",
+		DEMO_MPA_MAX_PLAYERS,
+		DEMO_MPA_CURRENT_PLAYERS,
+		DEMO_MPA_GROUP_ID,
+		false
+	)
+	if _mpa_set_op.is_done():
+		_on_mpa_set_completed(_mpa_set_op.get_result())
+	else:
+		_mpa_set_op.completed.connect(_on_mpa_set_completed)
+	_refresh_mpa_ui()
+
+func _on_mpa_set_completed(result) -> void:
+	if result != null and result.ok:
+		status_label.text = "GDK: Multiplayer activity ready ✓"
+	else:
+		status_label.text = "GDK: Multiplayer activity failed: %s" % result.message
+	_refresh_mpa_ui()
+
+func _on_mpa_clear_pressed() -> void:
+	if _mpa_delete_op != null and not _mpa_delete_op.is_done():
+		return
+
+	var gdk = GDKBootstrap.get_gdk()
+	if gdk == null:
+		return
+
+	var user = gdk.users.get_primary_user()
+	if user == null:
+		return
+
+	_mpa_delete_op = gdk.multiplayer_activity.delete_activity_async(user)
+	if _mpa_delete_op.is_done():
+		_on_mpa_delete_completed(_mpa_delete_op.get_result())
+	else:
+		_mpa_delete_op.completed.connect(_on_mpa_delete_completed)
+	_refresh_mpa_ui()
+
+func _on_mpa_delete_completed(result) -> void:
+	if result != null and result.ok:
+		status_label.text = "GDK: Multiplayer activity cleared"
+	else:
+		status_label.text = "GDK: Clear activity failed: %s" % result.message
+	_refresh_mpa_ui()
+
+func _on_mpa_invite_ui_pressed() -> void:
+	if _mpa_invite_ui_op != null and not _mpa_invite_ui_op.is_done():
+		return
+
+	var gdk = GDKBootstrap.get_gdk()
+	if gdk == null:
+		return
+
+	var user = gdk.users.get_primary_user()
+	if user == null:
+		return
+
+	_mpa_invite_ui_op = gdk.multiplayer_activity.show_invite_ui_async(user)
+	if _mpa_invite_ui_op.is_done():
+		_on_mpa_invite_ui_completed(_mpa_invite_ui_op.get_result())
+	else:
+		_mpa_invite_ui_op.completed.connect(_on_mpa_invite_ui_completed)
+	_refresh_mpa_ui()
+
+func _on_mpa_invite_ui_completed(result) -> void:
+	if result != null and result.ok:
+		status_label.text = "GDK: Invite UI completed"
+	else:
+		status_label.text = "GDK: Invite UI failed: %s" % result.message
+	_refresh_mpa_ui()
+
+func _on_mpa_activities_updated(xuids: PackedStringArray) -> void:
+	var gdk = GDKBootstrap.get_gdk()
+	var user = gdk.users.get_primary_user() if gdk != null else null
+	if user != null and xuids.has(user.xuid):
+		_refresh_mpa_ui()
+
+func _on_pending_invite_received(invite: Dictionary) -> void:
+	_last_mpa_event_text = "Pending invite — %s" % _format_invite_event(invite)
+	status_label.text = "GDK: Pending invite received"
+	_refresh_mpa_ui()
+
+func _on_invite_accepted(invite: Dictionary) -> void:
+	_last_mpa_event_text = "Accepted invite — %s" % _format_invite_event(invite)
+	status_label.text = "GDK: Invite accepted"
+	_refresh_mpa_ui()
+
+func _start_achievement_query(user) -> void:
+	if user == null:
+		return
+	if _achievement_query_op != null and not _achievement_query_op.is_done():
+		return
+
+	var gdk = GDKBootstrap.get_gdk()
+	if gdk == null:
+		return
+
+	achievement_button.text = "Loading Achievement %s..." % DEMO_ACHIEVEMENT_ID
+	achievement_button.disabled = true
+	achievement_label.text = "Achievement %s: syncing current progress..." % DEMO_ACHIEVEMENT_ID
+
+	_achievement_query_op = gdk.achievements.query_player_achievements_async(user)
+	if _achievement_query_op.is_done():
+		_on_achievement_query_completed(_achievement_query_op.get_result())
+	else:
+		_achievement_query_op.completed.connect(_on_achievement_query_completed)
+
+func _on_achievement_query_completed(result) -> void:
+	if not result.ok:
+		achievement_button.text = "Update Achievement %s" % DEMO_ACHIEVEMENT_ID
+		achievement_button.disabled = true
+		achievement_label.text = "Achievement %s: %s" % [DEMO_ACHIEVEMENT_ID, result.message]
+		return
+
+	_refresh_achievement_ui()
+
+func _on_achievement_pressed() -> void:
+	if _achievement_update_op != null and not _achievement_update_op.is_done():
+		return
+
+	var gdk = GDKBootstrap.get_gdk()
+	if gdk == null:
+		return
+
+	var user = gdk.users.get_primary_user()
+	if user == null:
+		return
+
+	var achievement = _find_cached_achievement(user, DEMO_ACHIEVEMENT_ID)
+	var next_progress: int = DEMO_ACHIEVEMENT_STEP
+	if achievement != null:
+		next_progress = mini(100, int(achievement.progress_percent) + DEMO_ACHIEVEMENT_STEP)
+
+	achievement_button.text = "Updating Achievement %s..." % DEMO_ACHIEVEMENT_ID
+	achievement_button.disabled = true
+	achievement_label.text = "Achievement %s: requesting %d%%..." % [DEMO_ACHIEVEMENT_ID, next_progress]
+
+	_achievement_update_op = gdk.achievements.update_achievement_async(user, DEMO_ACHIEVEMENT_ID, next_progress)
+	if _achievement_update_op.is_done():
+		_on_achievement_update_completed(_achievement_update_op.get_result())
+	else:
+		_achievement_update_op.completed.connect(_on_achievement_update_completed)
+
+func _on_achievement_update_completed(result) -> void:
+	if result.ok and result.data:
+		var achievement = result.data
+		achievement_label.text = "Achievement %s: %s (%d%%)" % [
+			DEMO_ACHIEVEMENT_ID,
+			achievement.progress_state,
+			achievement.progress_percent
+		]
+	else:
+		achievement_label.text = "Achievement %s: %s" % [DEMO_ACHIEVEMENT_ID, result.message]
+
+	_refresh_achievement_ui()
+
+func _on_achievements_updated(user) -> void:
+	if _is_primary_user(user):
+		_refresh_achievement_ui()
+
+func _on_achievement_unlocked(user, achievement_id: String) -> void:
+	if _is_primary_user(user) and achievement_id == DEMO_ACHIEVEMENT_ID:
+		status_label.text = "GDK: Achievement %s unlocked ✓" % DEMO_ACHIEVEMENT_ID
+		_refresh_achievement_ui()
+		_refresh_mpa_ui()
