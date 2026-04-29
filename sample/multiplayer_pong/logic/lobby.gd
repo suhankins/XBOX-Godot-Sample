@@ -25,7 +25,14 @@ func _ready() -> void:
 	multiplayer.connection_failed.connect(_connected_fail)
 	multiplayer.server_disconnected.connect(_server_disconnected)
 
-	# Dark neon background
+	# Dark neon background (deferred to avoid add_child during parent _ready)
+	call_deferred("_setup_visuals")
+
+	# Defer Xbox setup so GDKBootstrap has time to initialize
+	call_deferred("_setup_xbox")
+
+
+func _setup_visuals() -> void:
 	var bg = get_parent().get_node_or_null("Background")
 	if bg == null:
 		bg = ColorRect.new()
@@ -39,17 +46,30 @@ func _ready() -> void:
 	if title_label:
 		title_label.add_theme_font_size_override("font_size", 40)
 
-	# Wire Xbox signals
+
+func _setup_xbox() -> void:
 	var gdk = _get_gdk()
 	if gdk != null:
 		gdk.users.user_added.connect(_on_user_added)
 		gdk.users.user_removed.connect(_on_user_removed)
 		gdk.users.primary_user_changed.connect(_on_primary_user_changed)
+		# Also listen for late initialization
+		if not gdk.is_initialized():
+			gdk.initialized.connect(_on_gdk_initialized)
 
 	_refresh_xbox_state()
 
 
+func _on_gdk_initialized() -> void:
+	_refresh_xbox_state()
+
+
 func _get_gdk():
+	# Try the bootstrap's helper first (handles extension loading)
+	var bootstrap = get_node_or_null("/root/GDKBootstrap")
+	if bootstrap != null and bootstrap.has_method("get_gdk"):
+		return bootstrap.get_gdk()
+	# Fallback to direct singleton check
 	if Engine.has_singleton("GDK"):
 		return Engine.get_singleton("GDK")
 	return null
