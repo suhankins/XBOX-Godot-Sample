@@ -81,26 +81,18 @@ function(gdk_detect_dependencies)
     endif()
 
     if(ARG_XSAPI_RUNTIME_DLL_OUT)
-        get_filename_component(_GDK_ROOT "${GDK_WINDOWS}" DIRECTORY)
-        set(_XSAPI_GDK_RUNTIME_DEBUG "${_GDK_ROOT}/GRDK/ExtensionLibraries/Xbox.Services.API.C/Lib/x64/Debug/Microsoft.Xbox.Services.GDK.C.Thunks.dll")
-        set(_XSAPI_GDK_RUNTIME_RELEASE "${_GDK_ROOT}/GRDK/ExtensionLibraries/Xbox.Services.API.C/Lib/x64/Release/Microsoft.Xbox.Services.GDK.C.Thunks.dll")
-
-        if(EXISTS "${_XSAPI_GDK_RUNTIME_DEBUG}" AND EXISTS "${_XSAPI_GDK_RUNTIME_RELEASE}")
-            set(${ARG_XSAPI_RUNTIME_DLL_OUT} "$<IF:$<CONFIG:Debug>,${_XSAPI_GDK_RUNTIME_DEBUG},${_XSAPI_GDK_RUNTIME_RELEASE}>" PARENT_SCOPE)
-        else()
-            set(${ARG_XSAPI_RUNTIME_DLL_OUT} "${GDK_WINDOWS}/bin/x64/Microsoft.Xbox.Services.C.Thunks$<$<CONFIG:Debug>:.Debug>.dll" PARENT_SCOPE)
-        endif()
+        # Match the linker import: addons/godot_gdk/CMakeLists.txt links against
+        # Microsoft.Xbox.Services.C.Thunks[.Debug].lib whose DLL name is
+        # Microsoft.Xbox.Services.C.Thunks[.Debug].dll. The GRDK ExtensionLibraries
+        # variant ships a differently-named DLL (Microsoft.Xbox.Services.GDK.C.Thunks.dll)
+        # which does NOT satisfy that import, so always deploy the SDK thunks DLL
+        # alongside the addon binary so loading does not require GDK to be on PATH.
+        set(${ARG_XSAPI_RUNTIME_DLL_OUT} "${GDK_WINDOWS}/bin/x64/Microsoft.Xbox.Services.C.Thunks$<$<CONFIG:Debug>:.Debug>.dll" PARENT_SCOPE)
     endif()
 
     if(ARG_LIBHTTPCLIENT_RUNTIME_DLL_OUT)
-        get_filename_component(_GDK_ROOT "${GDK_WINDOWS}" DIRECTORY)
-        set(_LIBHTTPCLIENT_GDK_RUNTIME "${_GDK_ROOT}/GRDK/ExtensionLibraries/Xbox.LibHttpClient/Redist/x64/libHttpClient.GDK.dll")
-
-        if(EXISTS "${_LIBHTTPCLIENT_GDK_RUNTIME}")
-            set(${ARG_LIBHTTPCLIENT_RUNTIME_DLL_OUT} "${_LIBHTTPCLIENT_GDK_RUNTIME}" PARENT_SCOPE)
-        else()
-            set(${ARG_LIBHTTPCLIENT_RUNTIME_DLL_OUT} "${GDK_WINDOWS}/bin/x64/libHttpClient.dll" PARENT_SCOPE)
-        endif()
+        # libHttpClient.dll is the SDK-shipped runtime that matches the linker import.
+        set(${ARG_LIBHTTPCLIENT_RUNTIME_DLL_OUT} "${GDK_WINDOWS}/bin/x64/libHttpClient.dll" PARENT_SCOPE)
     endif()
 
     if(ARG_PLAYFAB_CORE_RUNTIME_DLL_OUT)

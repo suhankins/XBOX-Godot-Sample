@@ -45,8 +45,8 @@ cmake --build build --preset release
 The build:
 
 - Outputs addon DLLs to `addons/<addon>/bin/`
-- Copies built DLLs and runtime dependencies into each sample project's `addons/<addon>/bin/`
-- Syncs addon metadata and editor scripts into both `sample\` and `sample_shamwow\`
+- Copies built DLLs and runtime dependencies into each sample's `addons/<addon>/bin/`
+- Syncs addon metadata and editor scripts into the sample project
 
 ### Selective builds
 
@@ -74,22 +74,21 @@ To override manually:
 cmake --preset default -DGDK_WINDOWS="C:/Program Files (x86)/Microsoft GDK/260400/windows"
 ```
 
-## Run a sample project
+## Run the samples
+
+**You must build before launching any sample** — the build step syncs addon
+DLLs and runtime dependencies into every sample project. Without building,
+Godot will fail with "GDExtension dynamic library not found" errors.
 
 ```powershell
-# Build first
+# Build first (required — populates addon DLLs in all samples)
 cmake --build build --preset debug
 
-# Launch the baseline sample
-.\sample\launch_editor.bat
-
-# Or launch the ShamWow-style scenario shell
-.\sample_shamwow\launch_editor.bat
+# Launch any sample
+.\sample\gdk_demo\launch_editor.bat            # GDK addon demo
+.\sample\shamwow\launch_editor.bat             # ShamWow scenario shell
+.\sample\multiplayer_pong\launch_editor.bat    # Multiplayer pong
 ```
-
-> **Important:** Building and opening the sample works immediately. Xbox Live
-> features (sign-in, achievements) require additional Partner Center setup —
-> see [Sample Project Setup](godot-gdk-sample-setup.md).
 
 ## VS Code setup
 
@@ -114,8 +113,9 @@ addons/godot_gameinput/   # GameInput addon: metadata, native sources
 cmake/                    # Shared CMake helpers
 docs/                     # Documentation
 godot-cpp/                # godot-cpp submodule
-sample/                   # Shared Godot sample project
-sample_shamwow/           # ShamWow-inspired scenario shell sample
+sample/                   # Sample projects
+  gdk_demo/              #   GDK addon demo and tests
+  multiplayer_pong/      #   Multiplayer pong (from godot-demo-projects)
 spec/                     # Design spec documents
 tools/                    # CLI helper scripts
 ```
@@ -129,12 +129,12 @@ cmake --build build --preset debug
 ```
 
 This rebuilds the DLL and syncs it (plus addon metadata) into the sample
-projects.
+project.
 
 ### Running headless tests
 
 ```powershell
-cd sample
+cd sample/gdk_demo
 .\Godot_v4.6.1-stable_win64.exe --headless --script res://tests/run_tests.gd
 ```
 

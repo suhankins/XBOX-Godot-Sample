@@ -1,5 +1,5 @@
 extends Control
-## Minimal demo scene for the runtime/users/achievements/presence/social/multiplayer-activity baseline.
+## Minimal demo scene for the runtime/users/achievements baseline.
 
 const DEMO_ACHIEVEMENT_ID := "1"
 const DEMO_ACHIEVEMENT_STEP := 25
@@ -20,15 +20,11 @@ const DEMO_MPA_CURRENT_PLAYERS := 1
 @onready var achievement_button: Button = $VBoxContainer/AchievementButton
 @onready var achievement_label: Label = $VBoxContainer/AchievementLabel
 @onready var mpa_label: RichTextLabel = $VBoxContainer/MpaLabel
-@onready var social_label: RichTextLabel = $VBoxContainer/SocialLabel
 
 var _silent_sign_in_op = null
 var _gamer_picture_op = null
 var _achievement_query_op = null
 var _achievement_update_op = null
-var _presence_query_op = null
-var _friends_op = null
-var _friends_group = null
 var _mpa_set_op = null
 var _mpa_delete_op = null
 var _mpa_invite_ui_op = null
@@ -59,16 +55,11 @@ func _ready() -> void:
 		gdk.users.primary_user_changed.connect(_on_primary_user_changed)
 		gdk.achievements.achievements_updated.connect(_on_achievements_updated)
 		gdk.achievements.achievement_unlocked.connect(_on_achievement_unlocked)
-		gdk.presence.presence_changed.connect(_on_presence_changed)
-		gdk.presence.local_presence_set.connect(_on_local_presence_set)
-		gdk.social.social_graph_changed.connect(_on_social_graph_changed)
-		gdk.social.social_group_updated.connect(_on_social_group_updated)
-		gdk.social.social_user_changed.connect(_on_social_user_changed)
 		gdk.multiplayer_activity.activities_updated.connect(_on_mpa_activities_updated)
 		gdk.multiplayer_activity.pending_invite_received.connect(_on_pending_invite_received)
 		gdk.multiplayer_activity.invite_accepted.connect(_on_invite_accepted)
 
-		_refresh_state()
+	_refresh_state()
 
 func _refresh_state() -> void:
 	var gdk = GDKBootstrap.get_gdk()
@@ -92,7 +83,6 @@ func _refresh_state() -> void:
 		sign_in_button.text = "Retry Silent Sign-In"
 
 	_refresh_achievement_ui()
-	_refresh_social_ui()
 	_refresh_mpa_ui()
 
 func _show_user(user) -> void:
@@ -106,27 +96,22 @@ func _show_user(user) -> void:
 	sign_in_button.disabled = true
 	_load_gamer_picture(user)
 	_start_achievement_query(user)
-	_start_presence_query(user)
-	_start_social_flow(user)
 	_refresh_achievement_ui()
-	_refresh_social_ui()
 	_refresh_mpa_ui()
 
 func _clear_user() -> void:
 	gamertag_label.text = "No active user"
 	xuid_label.text = ""
 	user_label.text = "User: Not signed in"
-	_friends_group = null
 	_clear_avatar()
 	var gdk = GDKBootstrap.get_gdk()
 	if gdk != null and gdk.is_initialized():
 		sign_in_button.text = "Retry Silent Sign-In"
 		sign_in_button.disabled = false
-		achievement_button.text = "Update Achievement %s" % DEMO_ACHIEVEMENT_ID
-		achievement_button.disabled = true
-		achievement_label.text = "Achievement %s: sign in to load progress" % DEMO_ACHIEVEMENT_ID
-		_refresh_social_ui()
-		_refresh_mpa_ui()
+	achievement_button.text = "Update Achievement %s" % DEMO_ACHIEVEMENT_ID
+	achievement_button.disabled = true
+	achievement_label.text = "Achievement %s: sign in to load progress" % DEMO_ACHIEVEMENT_ID
+	_refresh_mpa_ui()
 
 func _clear_avatar() -> void:
 	avatar_rect.texture = null
@@ -235,9 +220,8 @@ func _on_runtime_initialized() -> void:
 	if gdk != null and not gdk.users.get_primary_user():
 		sign_in_button.text = "Retry Silent Sign-In"
 		sign_in_button.disabled = false
-		_refresh_achievement_ui()
-		_refresh_social_ui()
-		_refresh_mpa_ui()
+	_refresh_achievement_ui()
+	_refresh_mpa_ui()
 
 func _on_runtime_shutdown() -> void:
 	status_label.text = "GDK: Shut down"
@@ -250,9 +234,8 @@ func _on_runtime_error(result) -> void:
 	if gdk != null and not gdk.users.get_primary_user():
 		sign_in_button.text = "Retry Silent Sign-In"
 		sign_in_button.disabled = false
-		_refresh_achievement_ui()
-		_refresh_social_ui()
-		_refresh_mpa_ui()
+	_refresh_achievement_ui()
+	_refresh_mpa_ui()
 
 func _on_user_added(user) -> void:
 	_show_user(user)
@@ -285,60 +268,6 @@ func _find_cached_achievement(user, achievement_id: String):
 			return achievement
 	return null
 
-func _find_cached_presence(xuid: String):
-	var gdk = GDKBootstrap.get_gdk()
-	if gdk == null:
-		return null
-	return gdk.presence.get_cached_presence(xuid)
-
-func _presence_summary_text(presence) -> String:
-	if presence == null:
-		return "no cached record"
-
-	var summary: String = presence.get_user_state_name()
-	var title_records = presence.get_title_records()
-	if title_records.size() > 0:
-		var title_record: Dictionary = title_records[0]
-		var rich_presence := String(title_record.get("rich_presence_string", ""))
-		if rich_presence != "":
-			summary += " — %s" % rich_presence
-	return summary
-
-func _refresh_social_ui() -> void:
-	var social_lines := PackedStringArray()
-	var gdk = GDKBootstrap.get_gdk()
-
-	if gdk == null or not gdk.is_initialized():
-		social_lines.append("Presence: GDK not initialized")
-		social_lines.append("Friends tracked: unavailable")
-		social_label.text = "\n".join(social_lines)
-		return
-
-	var user = gdk.users.get_primary_user()
-	if user == null:
-		social_lines.append("Presence: sign in to load")
-		social_lines.append("Friends tracked: sign in to load")
-		social_label.text = "\n".join(social_lines)
-		return
-
-	var presence = _find_cached_presence(user.xuid)
-	if presence != null:
-		social_lines.append("Presence: %s" % _presence_summary_text(presence))
-	elif _presence_query_op != null and not _presence_query_op.is_done():
-		social_lines.append("Presence: loading...")
-	else:
-		social_lines.append("Presence: no cached record")
-
-	if _friends_group != null and _friends_group.is_loaded():
-		var friends = gdk.social.get_group_users(_friends_group)
-		social_lines.append("Friends tracked: %d" % friends.size())
-	elif _friends_op != null and not _friends_op.is_done():
-		social_lines.append("Friends tracked: loading...")
-	else:
-		social_lines.append("Friends tracked: social graph not ready")
-
-	social_label.text = "\n".join(social_lines)
-
 func _refresh_achievement_ui() -> void:
 	var gdk = GDKBootstrap.get_gdk()
 	var query_in_progress: bool = _achievement_query_op != null and not _achievement_query_op.is_done()
@@ -366,9 +295,9 @@ func _refresh_achievement_ui() -> void:
 	var achievement = _find_cached_achievement(user, DEMO_ACHIEVEMENT_ID)
 	if achievement != null:
 		achievement_label.text = "Achievement %s: %s (%d%%)" % [
-		DEMO_ACHIEVEMENT_ID,
-		achievement.progress_state,
-		achievement.progress_percent
+			DEMO_ACHIEVEMENT_ID,
+			achievement.progress_state,
+			achievement.progress_percent
 		]
 		if achievement.unlocked:
 			achievement_button.text = "Achievement %s Unlocked" % DEMO_ACHIEVEMENT_ID
@@ -377,7 +306,7 @@ func _refresh_achievement_ui() -> void:
 			var next_progress: int = mini(100, int(achievement.progress_percent) + DEMO_ACHIEVEMENT_STEP)
 			achievement_button.text = "Update Achievement %s to %d%%" % [DEMO_ACHIEVEMENT_ID, next_progress]
 			achievement_button.disabled = query_in_progress or update_in_progress
-			return
+		return
 
 	if query_in_progress:
 		achievement_button.text = "Loading Achievement %s..." % DEMO_ACHIEVEMENT_ID
@@ -476,19 +405,19 @@ func _on_mpa_set_pressed() -> void:
 		return
 
 	_mpa_set_op = gdk.multiplayer_activity.set_activity_async(
-	user,
-	DEMO_MPA_CONNECTION_STRING,
-	"followed",
-	DEMO_MPA_MAX_PLAYERS,
-	DEMO_MPA_CURRENT_PLAYERS,
-	DEMO_MPA_GROUP_ID,
-	false
+		user,
+		DEMO_MPA_CONNECTION_STRING,
+		"followed",
+		DEMO_MPA_MAX_PLAYERS,
+		DEMO_MPA_CURRENT_PLAYERS,
+		DEMO_MPA_GROUP_ID,
+		false
 	)
 	if _mpa_set_op.is_done():
 		_on_mpa_set_completed(_mpa_set_op.get_result())
 	else:
 		_mpa_set_op.completed.connect(_on_mpa_set_completed)
-		_refresh_mpa_ui()
+	_refresh_mpa_ui()
 
 func _on_mpa_set_completed(result) -> void:
 	if result != null and result.ok:
@@ -514,14 +443,14 @@ func _on_mpa_clear_pressed() -> void:
 		_on_mpa_delete_completed(_mpa_delete_op.get_result())
 	else:
 		_mpa_delete_op.completed.connect(_on_mpa_delete_completed)
-		_refresh_mpa_ui()
+	_refresh_mpa_ui()
 
 func _on_mpa_delete_completed(result) -> void:
 	if result != null and result.ok:
 		status_label.text = "GDK: Multiplayer activity cleared"
 	else:
 		status_label.text = "GDK: Clear activity failed: %s" % result.message
-		_refresh_mpa_ui()
+	_refresh_mpa_ui()
 
 func _on_mpa_invite_ui_pressed() -> void:
 	if _mpa_invite_ui_op != null and not _mpa_invite_ui_op.is_done():
@@ -540,14 +469,14 @@ func _on_mpa_invite_ui_pressed() -> void:
 		_on_mpa_invite_ui_completed(_mpa_invite_ui_op.get_result())
 	else:
 		_mpa_invite_ui_op.completed.connect(_on_mpa_invite_ui_completed)
-		_refresh_mpa_ui()
+	_refresh_mpa_ui()
 
 func _on_mpa_invite_ui_completed(result) -> void:
 	if result != null and result.ok:
 		status_label.text = "GDK: Invite UI completed"
 	else:
 		status_label.text = "GDK: Invite UI failed: %s" % result.message
-		_refresh_mpa_ui()
+	_refresh_mpa_ui()
 
 func _on_mpa_activities_updated(xuids: PackedStringArray) -> void:
 	var gdk = GDKBootstrap.get_gdk()
@@ -625,9 +554,9 @@ func _on_achievement_update_completed(result) -> void:
 	if result.ok and result.data:
 		var achievement = result.data
 		achievement_label.text = "Achievement %s: %s (%d%%)" % [
-		DEMO_ACHIEVEMENT_ID,
-		achievement.progress_state,
-		achievement.progress_percent
+			DEMO_ACHIEVEMENT_ID,
+			achievement.progress_state,
+			achievement.progress_percent
 		]
 	else:
 		achievement_label.text = "Achievement %s: %s" % [DEMO_ACHIEVEMENT_ID, result.message]
@@ -643,86 +572,3 @@ func _on_achievement_unlocked(user, achievement_id: String) -> void:
 		status_label.text = "GDK: Achievement %s unlocked ✓" % DEMO_ACHIEVEMENT_ID
 		_refresh_achievement_ui()
 		_refresh_mpa_ui()
-
-func _start_presence_query(user) -> void:
-	if user == null:
-		return
-	if _presence_query_op != null and not _presence_query_op.is_done():
-		return
-
-	var gdk = GDKBootstrap.get_gdk()
-	if gdk == null:
-		return
-
-	var xuids := PackedStringArray([user.xuid])
-	_presence_query_op = gdk.presence.get_presence_async(xuids)
-	if _presence_query_op.is_done():
-		_on_presence_query_completed(_presence_query_op.get_result())
-	else:
-		_presence_query_op.completed.connect(_on_presence_query_completed)
-
-func _on_presence_query_completed(_result) -> void:
-	_refresh_social_ui()
-
-func _start_social_flow(user) -> void:
-	if user == null:
-		return
-	if _friends_group != null and _friends_group.is_loaded():
-		_refresh_social_ui()
-		return
-	if _friends_op != null and not _friends_op.is_done():
-		return
-
-	var gdk = GDKBootstrap.get_gdk()
-	if gdk == null:
-		return
-
-	var start_result = gdk.social.start_social_graph(user)
-	if not start_result.ok:
-		social_label.text = "Presence: unavailable\nFriends tracked: %s" % start_result.message
-		return
-
-	_friends_op = gdk.social.get_friends_async(user)
-	if _friends_op.is_done():
-		_on_friends_completed(_friends_op.get_result())
-	else:
-		_friends_op.completed.connect(_on_friends_completed)
-
-func _on_friends_completed(result) -> void:
-	if result != null and result.ok and result.data != null:
-		_friends_group = result.data
-		_refresh_social_ui()
-
-func _on_presence_changed(xuid: String, _presence) -> void:
-	var gdk = GDKBootstrap.get_gdk()
-	var primary_user = gdk.users.get_primary_user() if gdk != null else null
-	if primary_user != null and primary_user.xuid == xuid:
-		_refresh_social_ui()
-
-func _on_local_presence_set(user) -> void:
-	if _is_primary_user(user):
-		_refresh_social_ui()
-
-func _on_social_graph_changed(user) -> void:
-	if _is_primary_user(user):
-		_refresh_social_ui()
-
-func _on_social_group_updated(group) -> void:
-	var gdk = GDKBootstrap.get_gdk()
-	var primary_user = gdk.users.get_primary_user() if gdk != null else null
-	if primary_user == null or group == null:
-		return
-
-	var local_user = group.get_local_user()
-	if local_user == null or local_user.local_id != primary_user.local_id:
-		return
-
-	if group.get_group_type() == GDKSocialGroup.GROUP_TYPE_FILTER \
-		and group.get_relationship_filter() == GDKSocialFilter.RELATIONSHIP_FILTER_FRIENDS:
-		_friends_group = group
-
-	_refresh_social_ui()
-
-func _on_social_user_changed(_xuid: String, _social_user) -> void:
-	if _friends_group != null and _friends_group.is_loaded():
-		_refresh_social_ui()

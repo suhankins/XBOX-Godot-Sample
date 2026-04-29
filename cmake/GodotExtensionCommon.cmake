@@ -2,32 +2,13 @@ include_guard(GLOBAL)
 
 include(CMakeParseArguments)
 
-function(_godot_addon_get_paths addon_name addon_bin_out sample_addon_dirs_out sample_bins_out)
+function(_godot_addon_get_paths addon_name addon_bin_out)
     if(NOT DEFINED GODOT_ADDONS_ROOT)
         message(FATAL_ERROR "The root superproject must define GODOT_ADDONS_ROOT before including GodotExtensionCommon.cmake.")
     endif()
 
-    if(DEFINED GODOT_SAMPLE_PROJECT_ROOTS)
-        set(sample_project_roots ${GODOT_SAMPLE_PROJECT_ROOTS})
-    elseif(DEFINED GODOT_SAMPLE_ADDONS_ROOT)
-        get_filename_component(sample_project_root "${GODOT_SAMPLE_ADDONS_ROOT}" DIRECTORY)
-        set(sample_project_roots "${sample_project_root}")
-    else()
-        message(FATAL_ERROR "The root superproject must define GODOT_SAMPLE_PROJECT_ROOTS or GODOT_SAMPLE_ADDONS_ROOT before including GodotExtensionCommon.cmake.")
-    endif()
-
     set(addon_bin "${GODOT_ADDONS_ROOT}/${addon_name}/bin")
-    set(sample_addon_dirs "")
-    set(sample_bins "")
-
-    foreach(sample_project_root IN LISTS sample_project_roots)
-        list(APPEND sample_addon_dirs "${sample_project_root}/addons/${addon_name}")
-        list(APPEND sample_bins "${sample_project_root}/addons/${addon_name}/bin")
-    endforeach()
-
     set(${addon_bin_out} "${addon_bin}" PARENT_SCOPE)
-    set(${sample_addon_dirs_out} "${sample_addon_dirs}" PARENT_SCOPE)
-    set(${sample_bins_out} "${sample_bins}" PARENT_SCOPE)
 endfunction()
 
 function(godot_addon_configure_target)
@@ -38,7 +19,7 @@ function(godot_addon_configure_target)
         message(FATAL_ERROR "godot_addon_configure_target requires TARGET and ADDON_NAME.")
     endif()
 
-    _godot_addon_get_paths("${ARG_ADDON_NAME}" addon_bin sample_addon_dirs sample_bins)
+    _godot_addon_get_paths("${ARG_ADDON_NAME}" addon_bin)
 
     set_target_properties(${ARG_TARGET} PROPERTIES
         OUTPUT_NAME                      "${ARG_ADDON_NAME}.windows.release.x86_64"
@@ -55,36 +36,26 @@ function(godot_addon_configure_target)
         SUFFIX ".dll"
     )
 
-    set(copy_commands)
-    foreach(sample_bin IN LISTS sample_bins)
-        list(APPEND copy_commands
+    foreach(sample_dir IN LISTS GODOT_SAMPLE_DIRS)
+        set(sample_bin "${sample_dir}/addons/${ARG_ADDON_NAME}/bin")
+
+        add_custom_command(TARGET ${ARG_TARGET} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory "${sample_bin}"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "$<TARGET_FILE:${ARG_TARGET}>"
                 "${sample_bin}/$<TARGET_FILE_NAME:${ARG_TARGET}>"
+            COMMENT "Copying ${ARG_ADDON_NAME} DLL to ${sample_dir}"
         )
-    endforeach()
 
-    add_custom_command(TARGET ${ARG_TARGET} POST_BUILD
-        ${copy_commands}
-        COMMENT "Copying ${ARG_ADDON_NAME} DLL to sample projects"
-    )
-
-    set(pdb_copy_commands)
-    foreach(sample_bin IN LISTS sample_bins)
-        list(APPEND pdb_copy_commands
+        add_custom_command(TARGET ${ARG_TARGET} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory "${sample_bin}"
             COMMAND ${CMAKE_COMMAND} -E
                 $<IF:$<CONFIG:Debug>,copy_if_different,true>
                 $<IF:$<CONFIG:Debug>,$<TARGET_FILE_DIR:${ARG_TARGET}>/$<TARGET_FILE_BASE_NAME:${ARG_TARGET}>.pdb,>
                 $<IF:$<CONFIG:Debug>,${sample_bin}/,>
+            COMMENT "Copying ${ARG_ADDON_NAME} PDB to ${sample_dir} (Debug only)"
         )
     endforeach()
-
-    add_custom_command(TARGET ${ARG_TARGET} POST_BUILD
-        ${pdb_copy_commands}
-        COMMENT "Copying ${ARG_ADDON_NAME} PDB to sample projects (Debug only)"
-    )
 endfunction()
 
 function(godot_addon_copy_runtime_files)
@@ -100,22 +71,24 @@ function(godot_addon_copy_runtime_files)
         return()
     endif()
 
-    _godot_addon_get_paths("${ARG_ADDON_NAME}" addon_bin sample_addon_dirs sample_bins)
+    _godot_addon_get_paths("${ARG_ADDON_NAME}" addon_bin)
 
     set(copy_commands
         COMMAND ${CMAKE_COMMAND} -E make_directory "${addon_bin}"
     )
 
-    foreach(sample_bin IN LISTS sample_bins)
+    foreach(runtime_file IN LISTS ARG_FILES)
         list(APPEND copy_commands
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${sample_bin}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${runtime_file}" "${addon_bin}/"
         )
     endforeach()
 
-    foreach(runtime_file IN LISTS ARG_FILES)
-        list(APPEND copy_commands COMMAND ${CMAKE_COMMAND} -E copy_if_different "${runtime_file}" "${addon_bin}/")
-
-        foreach(sample_bin IN LISTS sample_bins)
+    foreach(sample_dir IN LISTS GODOT_SAMPLE_DIRS)
+        set(sample_bin "${sample_dir}/addons/${ARG_ADDON_NAME}/bin")
+        list(APPEND copy_commands
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${sample_bin}"
+        )
+        foreach(runtime_file IN LISTS ARG_FILES)
             list(APPEND copy_commands
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different "${runtime_file}" "${sample_bin}/"
             )
@@ -124,7 +97,7 @@ function(godot_addon_copy_runtime_files)
 
     add_custom_command(TARGET ${ARG_TARGET} POST_BUILD
         ${copy_commands}
-        COMMENT "Copying ${ARG_ADDON_NAME} runtime files to sample projects"
+        COMMENT "Copying ${ARG_ADDON_NAME} runtime files"
     )
 endfunction()
 
@@ -141,12 +114,10 @@ function(godot_addon_sync_files_to_sample)
         return()
     endif()
 
-    _godot_addon_get_paths("${ARG_ADDON_NAME}" addon_bin sample_addon_dirs sample_bins)
+    foreach(sample_dir IN LISTS GODOT_SAMPLE_DIRS)
+        set(sample_addon_dir "${sample_dir}/addons/${ARG_ADDON_NAME}")
 
-    set(sync_commands)
-
-    foreach(sample_addon_dir IN LISTS sample_addon_dirs)
-        list(APPEND sync_commands
+        set(sync_commands
             COMMAND ${CMAKE_COMMAND} -E make_directory "${sample_addon_dir}"
         )
 
@@ -164,10 +135,10 @@ function(godot_addon_sync_files_to_sample)
                     "${sample_addon_dir}/${sync_file}"
             )
         endforeach()
-    endforeach()
 
-    add_custom_command(TARGET ${ARG_TARGET} POST_BUILD
-        ${sync_commands}
-        COMMENT "Syncing ${ARG_ADDON_NAME} addon files to sample projects"
-    )
+        add_custom_command(TARGET ${ARG_TARGET} POST_BUILD
+            ${sync_commands}
+            COMMENT "Syncing ${ARG_ADDON_NAME} addon files to ${sample_dir}"
+        )
+    endforeach()
 endfunction()

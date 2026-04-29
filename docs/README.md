@@ -9,6 +9,19 @@ Microsoft public GDK.
 - [**Getting Started**](getting-started.md) — prerequisites, building,
   VS Code setup, and development workflow
 
+## Sample projects
+
+Three sample projects live under `sample/`:
+
+| Sample | Description |
+|--------|-------------|
+| [`gdk_demo`](godot-gdk-sample-and-tests.md) | GDK addon demo + headless test suite |
+| [`shamwow`](godot-gdk-sample-and-tests.md) | ShamWow-inspired scenario shell |
+| `multiplayer_pong` | Multiplayer pong with Xbox identity and single player AI |
+
+All samples share the same GDK setup. See [Sample Project Setup](godot-gdk-sample-setup.md)
+for Partner Center configuration.
+
 ## Godot GDK addon (`godot_gdk`)
 
 ### User guides
