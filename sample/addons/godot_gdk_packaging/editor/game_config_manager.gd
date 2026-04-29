@@ -266,6 +266,99 @@ func sync_store_logos() -> int:
 	return updated
 
 
+## Detects logo PNGs that GameConfigEditor wrote to the project root,
+## moves them into storelogos/, and updates MicrosoftGame.config paths.
+## Returns the number of files relocated.
+func relocate_logos_to_storelogos() -> int:
+	if not config_exists():
+		return 0
+
+	var project_dir = ProjectSettings.globalize_path("res://")
+	var logos_dir = project_dir.path_join("storelogos")
+
+	# Known logo filenames that GameConfigEditor writes to the project root
+	var logo_files := {
+		"StoreLogo.png": "StoreLogo",
+		"Square44x44Logo.png": "Square44x44Logo",
+		"Square150x150Logo.png": "Square150x150Logo",
+		"Square480x480Logo.png": "Square480x480Logo",
+		"SplashScreenImage.png": "SplashScreenImage",
+	}
+
+	# Also detect the source image (e.g. fhl_logo.png) referenced in the config
+	var info = parse_config()
+	var config_logos := {
+		"store_logo": "StoreLogo",
+		"logo_44": "Square44x44Logo",
+		"logo_150": "Square150x150Logo",
+		"logo_480": "Square480x480Logo",
+		"splash_screen": "SplashScreenImage",
+	}
+
+	# Build a mapping of root files that need to move
+	var files_to_move := {}  # src_abs -> dest_filename
+	var path_replacements := {}  # old_config_value -> new_config_value
+
+	for key in config_logos:
+		var rel_path: String = info.get(key, "")
+		if rel_path == "":
+			continue
+		var normalized = rel_path.replace("\\", "/")
+		# Only relocate if the file is at the project root (no directory component)
+		if normalized.contains("/"):
+			continue
+		var src_abs = project_dir.path_join(normalized)
+		if not FileAccess.file_exists(src_abs):
+			continue
+		var dest_filename = normalized.get_file()
+		files_to_move[src_abs] = dest_filename
+		path_replacements[rel_path] = "storelogos\\" + dest_filename
+
+	# Also check for standard GameConfigEditor output names at root
+	for filename in logo_files:
+		var src_abs = project_dir.path_join(filename)
+		if FileAccess.file_exists(src_abs) and not files_to_move.has(src_abs):
+			files_to_move[src_abs] = filename
+			path_replacements[filename] = "storelogos\\" + filename
+
+	if files_to_move.is_empty():
+		return 0
+
+	# Ensure storelogos directory exists
+	DirAccess.make_dir_recursive_absolute(logos_dir)
+
+	# Move files
+	var moved := 0
+	var dir = DirAccess.open(project_dir)
+	for src_abs in files_to_move:
+		var dest_filename: String = files_to_move[src_abs]
+		var dest_abs = logos_dir.path_join(dest_filename)
+		var err = dir.rename(src_abs, dest_abs)
+		if err == OK:
+			moved += 1
+			print("[GDK Packaging] Moved ", src_abs.get_file(), " -> storelogos/", dest_filename)
+		else:
+			push_warning("[GDK Packaging] Failed to move " + src_abs.get_file() + ": " + error_string(err))
+
+	# Update MicrosoftGame.config with new paths
+	if moved > 0 and not path_replacements.is_empty():
+		var config_path = get_config_path()
+		var file = FileAccess.open(config_path, FileAccess.READ)
+		if file != null:
+			var content = file.get_as_text()
+			file.close()
+			for old_val in path_replacements:
+				var new_val: String = path_replacements[old_val]
+				content = content.replace('"' + old_val + '"', '"' + new_val + '"')
+			file = FileAccess.open(config_path, FileAccess.WRITE)
+			if file != null:
+				file.store_string(content)
+				file.close()
+				print("[GDK Packaging] Updated MicrosoftGame.config logo paths")
+
+	return moved
+
+
 # ── GameConfigEditor Launch ─────────────────────────────────────────────────
 
 ## Launches MicrosoftGameConfigEditor.exe with the project's config file.

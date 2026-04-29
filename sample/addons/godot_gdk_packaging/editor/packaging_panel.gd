@@ -334,7 +334,12 @@ func _refresh_config_status() -> void:
 		else:
 			_config_identity_label.text = "(could not parse identity)"
 
-		# Sync store logos — regenerate all sizes from the 480x480 source
+		# Relocate any logos GameConfigEditor wrote to project root into storelogos/
+		var relocated = _config_mgr.relocate_logos_to_storelogos()
+		if relocated > 0:
+			_log("Relocated %d logo(s) to storelogos/" % relocated)
+
+		# Sync remaining logos — regenerate other sizes from the 480x480 source
 		var synced = _config_mgr.sync_store_logos()
 		if synced > 0:
 			_log("Synced %d store logo(s) from 480x480 source" % synced)
