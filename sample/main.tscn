@@ -61,45 +61,70 @@ layout_mode = 2
 visible = false
 text = "User: Not signed in"
 
-[node name="InputLabel" type="Label" parent="VBoxContainer" unique_id=1823063938]
-layout_mode = 2
-text = "Controllers: 0"
-
 [node name="SignInButton" type="Button" parent="VBoxContainer" unique_id=521297586]
 layout_mode = 2
 focus_mode = 2
-focus_neighbor_bottom = NodePath("../HapticsToggle")
-text = "Sign In"
+focus_neighbor_bottom = NodePath("../MpaSetActivityButton")
+text = "Silent Sign-In"
 
-[node name="HapticsToggle" type="CheckButton" parent="VBoxContainer"]
+[node name="MpaSetActivityButton" type="Button" parent="VBoxContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 48)
 focus_mode = 2
 focus_neighbor_top = NodePath("../SignInButton")
+focus_neighbor_bottom = NodePath("../MpaClearActivityButton")
+theme_override_font_sizes/font_size = 20
+disabled = true
+text = "Set Multiplayer Activity"
+
+[node name="MpaClearActivityButton" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 48)
+focus_mode = 2
+focus_neighbor_top = NodePath("../MpaSetActivityButton")
+focus_neighbor_bottom = NodePath("../MpaInviteUiButton")
+theme_override_font_sizes/font_size = 20
+disabled = true
+text = "Clear Multiplayer Activity"
+
+[node name="MpaInviteUiButton" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 48)
+focus_mode = 2
+focus_neighbor_top = NodePath("../MpaClearActivityButton")
 focus_neighbor_bottom = NodePath("../AchievementButton")
 theme_override_font_sizes/font_size = 20
-text = "Haptics Demo (X = jolt, RT = rumble)"
+disabled = true
+text = "Open Invite UI"
 
 [node name="AchievementButton" type="Button" parent="VBoxContainer"]
 layout_mode = 2
 focus_mode = 2
-focus_neighbor_top = NodePath("../HapticsToggle")
+focus_neighbor_top = NodePath("../MpaInviteUiButton")
 focus_neighbor_bottom = NodePath("../SignInButton")
 disabled = true
-text = "🏆 Unlock Achievement: Demo Played"
+text = "Update Achievement 1"
 
 [node name="AchievementLabel" type="Label" parent="VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
-text = ""
+text = "Achievement 1: sign in to load progress"
 
 [node name="HSeparator" type="HSeparator" parent="VBoxContainer"]
 layout_mode = 2
 
-[node name="GamepadDisplay" type="RichTextLabel" parent="VBoxContainer"]
+[node name="MpaLabel" type="RichTextLabel" parent="VBoxContainer"]
 layout_mode = 2
-size_flags_vertical = 3
+custom_minimum_size = Vector2(0, 90)
 bbcode_enabled = true
-text = "[center][color=gray]No controller connected[/color][/center]"
+text = "[color=gray]MPA: sign in to configure an activity[/color]"
+fit_content = false
+scroll_active = false
+
+[node name="SocialLabel" type="RichTextLabel" parent="VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 60)
+bbcode_enabled = true
+text = "[color=gray]Presence: sign in to load\nFriends tracked: sign in to load[/color]"
 fit_content = false
 scroll_active = false
