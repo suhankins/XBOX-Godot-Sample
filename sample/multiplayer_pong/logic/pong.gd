@@ -74,7 +74,7 @@ func _shake() -> void:
 
 
 @rpc("any_peer", "call_local")
-func update_score(add_to_left: int) -> void:
+func update_score(add_to_left: bool) -> void:
 	_shake()
 
 	if add_to_left:

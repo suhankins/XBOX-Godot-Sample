@@ -153,5 +153,6 @@ Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
 Write-Host "  1. Set your PC sandbox:  XblPCSandbox.exe set $SandboxId"
 Write-Host "  2. Build the addon:      cmake --build build --preset debug"
-Write-Host "  3. Launch the editor:    .\sample\gdk_demo\launch_editor.bat"
+$LaunchScript = Join-Path $SampleDir "launch_editor.bat"
+Write-Host "  3. Launch the editor:    $LaunchScript"
 Write-Host ""

@@ -76,7 +76,7 @@ func stop() -> void:
 
 
 @rpc("any_peer", "call_local")
-func _reset_ball(for_left: float) -> void:
+func _reset_ball(for_left: bool) -> void:
 	position = _screen_size / 2
 	if for_left:
 		direction = Vector2.LEFT
