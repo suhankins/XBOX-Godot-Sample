@@ -45,7 +45,7 @@ cmake --build build --preset release
 The build:
 
 - Outputs addon DLLs to `addons/<addon>/bin/`
-- Copies built DLLs and runtime dependencies into `sample/gdk_demo/addons/<addon>/bin/`
+- Copies built DLLs and runtime dependencies into each sample's `addons/<addon>/bin/`
 - Syncs addon metadata and editor scripts into the sample project
 
 ### Selective builds
