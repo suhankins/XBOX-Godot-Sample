@@ -74,25 +74,20 @@ To override manually:
 cmake --preset default -DGDK_WINDOWS="C:/Program Files (x86)/Microsoft GDK/260400/windows"
 ```
 
-## Run the sample
+## Run the samples
+
+**You must build before launching any sample** — the build step syncs addon
+DLLs and runtime dependencies into every sample project. Without building,
+Godot will fail with "GDExtension dynamic library not found" errors.
 
 ```powershell
-# Build first
+# Build first (required — populates addon DLLs in all samples)
 cmake --build build --preset debug
 
-# Launch the Godot editor with the sample project
-.\sample\gdk_demo\launch_editor.bat
-```
-
-> **Important:** Building and opening the sample works immediately. Xbox Live
-> features (sign-in, achievements) require additional Partner Center setup —
-> see [Sample Project Setup](godot-gdk-sample-setup.md).
-
-Other samples can be launched the same way:
-
-```powershell
-.\sample\shamwow\launch_editor.bat           # ShamWow scenario shell
-.\sample\multiplayer_pong\launch_editor.bat   # Multiplayer pong
+# Launch any sample
+.\sample\gdk_demo\launch_editor.bat            # GDK addon demo
+.\sample\shamwow\launch_editor.bat             # ShamWow scenario shell
+.\sample\multiplayer_pong\launch_editor.bat    # Multiplayer pong
 ```
 
 ## VS Code setup

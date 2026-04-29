@@ -184,7 +184,7 @@ bool GDK::is_initialized() const {
 }
 
 int64_t GDK::dispatch() {
-    return static_cast<int64_t>(m_runtime->dispatch() + m_achievements->dispatch() + m_social->dispatch() + m_multiplayer_activity->dispatch());
+    return static_cast<int64_t>(m_runtime->dispatch() + m_achievements->dispatch() + m_social->dispatch());
 }
 
 Ref<GDKResult> GDK::get_last_error() const {
