@@ -12,6 +12,7 @@ const ConfigImportPlugin = preload("res://addons/godot_gdk_packaging/editor/conf
 const DOC_PC_PACKAGING := "https://learn.microsoft.com/en-us/gaming/gdk/_content/gc/packaging/pc/pc-packaging-getting-started"
 const DOC_MAKEPKG := "https://learn.microsoft.com/en-us/gaming/gdk/_content/gc/packaging/deployment/makepkg-package-creation"
 const DOC_GAME_CONFIG_EDITOR := "https://learn.microsoft.com/en-us/gaming/gdk/_content/gc/system/overviews/game-config-editor"
+const DOC_ACHIEVEMENTS := "https://learn.microsoft.com/en-us/gaming/gdk/docs/gdk-dev/pc-dev/tutorials/pc-e2e-guide/e2e-services/e2e-achievements"
 
 var _menu_bar: MenuBar
 var _gdk_popup: PopupMenu
@@ -33,6 +34,7 @@ enum MenuID {
 	DOC_PACKAGING,
 	DOC_MAKEPKG,
 	DOC_CONFIG_EDITOR,
+	DOC_ACHIEVEMENTS,
 }
 
 
@@ -59,6 +61,7 @@ func _enter_tree() -> void:
 		_gdk_popup.add_item("📖 PC Packaging Overview", MenuID.DOC_PACKAGING)
 		_gdk_popup.add_item("📖 makepkg Reference", MenuID.DOC_MAKEPKG)
 		_gdk_popup.add_item("📖 GameConfigEditor Reference", MenuID.DOC_CONFIG_EDITOR)
+		_gdk_popup.add_item("📖 Achievements Guide", MenuID.DOC_ACHIEVEMENTS)
 		_gdk_popup.id_pressed.connect(_on_menu_item_pressed)
 
 		_menu_bar.add_child(_gdk_popup)
@@ -144,6 +147,9 @@ func _on_menu_item_pressed(id: int) -> void:
 
 		MenuID.DOC_CONFIG_EDITOR:
 			OS.shell_open(DOC_GAME_CONFIG_EDITOR)
+
+		MenuID.DOC_ACHIEVEMENTS:
+			OS.shell_open(DOC_ACHIEVEMENTS)
 
 
 func _focus_packaging_panel() -> void:
