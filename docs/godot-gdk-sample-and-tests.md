@@ -9,15 +9,23 @@ See also:
 
 ## Sample project role
 
-The sample projects are the easiest place to see how the plugin is expected to be used in Godot.
+The `sample/` directory contains multiple sample projects that demonstrate
+how to use the GDK addon:
 
-It currently exercises the runtime/users/achievements/presence/social baseline and acts as the main integration target for the addon's synced binaries and editor metadata.
+| Sample | Description |
+|--------|-------------|
+| `sample/gdk_demo/` | Baseline runtime/users/achievements/presence/social demo and headless test suite |
+| `sample/shamwow/` | ShamWow-inspired scenario shell with grouped actions and event log |
+| `sample/multiplayer_pong/` | Multiplayer pong with Xbox identity, single player AI, and visual effects |
+
+All samples share the same GDK addon setup: `gdk_bootstrap.gd` autoload,
+`plugin.cfg` editor plugin, and addon DLLs synced by the CMake build system.
 
 ## Autoload bootstrap
 
-`sample\project.godot` autoloads `sample\gdk_bootstrap.gd`.
+Each sample's `project.godot` autoloads its own copy of `gdk_bootstrap.gd`.
 
-That bootstrap currently:
+The `gdk_demo` bootstrap currently:
 
 1. skips itself during the headless test run
 2. connects to root and users signals
@@ -26,13 +34,15 @@ That bootstrap currently:
 5. calls `GDK.dispatch()` every frame
 6. shuts the runtime down when leaving the tree
 
-That means the sample currently treats `GDK.dispatch()` as a per-frame pump managed by an autoload.
+That means the GDK demo sample treats `GDK.dispatch()` as a per-frame pump managed by an autoload.
 
-`sample_shamwow\project.godot` also autoloads `sample_shamwow\gdk_bootstrap.gd`, but that bootstrap only keeps the extension loaded and pumps dispatch when the runtime is already initialized. Runtime initialization itself is left to explicit scenarios in the shell.
+`sample\shamwow\gdk_bootstrap.gd` also autoloads in the ShamWow sample, but that bootstrap only keeps the extension loaded and pumps dispatch when the runtime is already initialized. Runtime initialization itself is left to explicit scenarios in the shell.
 
-## Demo scene
+## Demo scenes
 
-`sample\main.gd` is a minimal runtime/users/achievements/presence/social demo layered onto the existing sample scene.
+### GDK Demo (`sample\gdk_demo\main.gd`)
+
+A minimal runtime/users/achievements/presence/social demo.
 
 It currently:
 
@@ -49,7 +59,9 @@ It currently:
 
 The older controller widgets are still present in the scene tree, but the script now reuses one of the previously hidden text areas for the presence/social summary because controller-native functionality is still not part of the current baseline.
 
-`sample_shamwow\main.gd` instead builds a scenario catalog with grouped runtime, users, achievements, and multiplayer activity actions. It mirrors ShamWow conceptually through:
+### ShamWow (`sample\shamwow\main.gd`)
+
+`sample\shamwow\main.gd` builds a scenario catalog with grouped runtime, users, achievements, and multiplayer activity actions. It mirrors ShamWow conceptually through:
 
 - grouped scenarios
 - nested "up one level" navigation
@@ -57,9 +69,17 @@ The older controller widgets are still present in the scene tree, but the script
 - a persistent event log
 - a side panel that reflects the currently selected scenario and live GDK state
 
+### Multiplayer Pong (`sample\multiplayer_pong\`)
+
+A multiplayer pong game imported from [godot-demo-projects](https://github.com/godotengine/godot-demo-projects) and extended with:
+
+- Single player mode with AI opponent
+- Xbox identity integration (sign-in required for multiplayer, optional for single player)
+- Visual effects: ball trail, screen shake, score pop animations, neon color scheme
+
 ## Headless tests
 
-`sample\tests\run_tests.gd` is the current regression harness for the plugin.
+`sample\gdk_demo\tests\run_tests.gd` is the current regression harness for the plugin.
 
 It checks:
 

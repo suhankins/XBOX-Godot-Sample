@@ -22,7 +22,7 @@ cmake --preset default
 cmake --build build --preset debug
 
 # Launch the sample
-.\sample\launch_editor.bat
+.\sample\gdk_demo\launch_editor.bat
 ```
 
 > **Note:** Building and opening the sample works immediately. Xbox Live
@@ -30,10 +30,10 @@ cmake --build build --preset debug
 > see [Sample Project Setup](docs/godot-gdk-sample-setup.md).
 
 The repo also includes a ShamWow-inspired scenario shell sample at
-`sample_shamwow\`. Launch it with:
+`sample\shamwow\`. Launch it with:
 
 ```powershell
-.\sample_shamwow\launch_editor.bat
+.\sample\shamwow\launch_editor.bat
 ```
 
 ### Requirements
@@ -53,16 +53,19 @@ addons/godot_gameinput/   # GameInput addon: metadata, native sources
 cmake/                    # Shared CMake helpers
 docs/                     # Documentation
 godot-cpp/                # godot-cpp submodule
-sample/                   # Shared Godot sample project
-sample_shamwow/          # ShamWow-inspired scenario shell sample
+sample/                   # Sample projects
+  gdk_demo/              #   GDK addon demo and tests
+  multiplayer_pong/      #   Multiplayer pong (from godot-demo-projects)
+  shamwow/               #   ShamWow-inspired scenario shell sample
 spec/                     # Design spec documents
 tools/                    # CLI helper scripts
 ```
 
 ## Sample projects
 
-- `sample\` — baseline runtime/users/achievements demo
-- `sample_shamwow\` — scenario-driven shell inspired by ShamWow, built around grouped runtime/users/achievements/multiplayer-activity actions and an event log
+- `sample\gdk_demo\` — baseline runtime/users/achievements demo
+- `sample\shamwow\` — scenario-driven shell inspired by ShamWow, built around grouped runtime/users/achievements/multiplayer-activity actions and an event log
+- `sample\multiplayer_pong\` — multiplayer pong with Xbox identity and single player mode
 
 ## Documentation
 

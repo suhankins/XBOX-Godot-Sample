@@ -382,7 +382,7 @@ func _detect_gdk() -> void:
 		da.list_dir_begin()
 		var entry: String = da.get_next()
 		while entry != "":
-			if da.current_is_dir() and entry[0].is_valid_int():
+			if da.current_is_dir() and entry.substr(0, 1).is_valid_int():
 				editions.append(entry)
 			entry = da.get_next()
 		da.list_dir_end()
