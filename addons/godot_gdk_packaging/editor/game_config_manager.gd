@@ -115,11 +115,11 @@ func create_template(game_name: String = "MyGodotGame",
 	xml += '  </ExecutableList>\n'
 	xml += '  <ShellVisuals DefaultDisplayName="%s"\n' % _escape_xml_attr(display_name)
 	xml += '                PublisherDisplayName="%s"\n' % _escape_xml_attr(publisher.replace("CN=", ""))
-	xml += '                StoreLogo="StoreLogo.png"\n'
-	xml += '                Square150x150Logo="Logo150.png"\n'
-	xml += '                Square44x44Logo="Logo44.png"\n'
-	xml += '                Square480x480Logo="Logo480.png"\n'
-	xml += '                SplashScreenImage="SplashScreen.png"\n'
+	xml += '                StoreLogo="storelogos\\StoreLogo.png"\n'
+	xml += '                Square150x150Logo="storelogos\\Logo150.png"\n'
+	xml += '                Square44x44Logo="storelogos\\Logo44.png"\n'
+	xml += '                Square480x480Logo="storelogos\\Logo480.png"\n'
+	xml += '                SplashScreenImage="storelogos\\SplashScreen.png"\n'
 	xml += '                Description="A Godot game packaged with GDK"\n'
 	xml += '                BackgroundColor="#000000"\n'
 	xml += '                ForegroundText="light" />\n'
@@ -144,17 +144,12 @@ func create_template(game_name: String = "MyGodotGame",
 ## images referenced by the MicrosoftGame.config template.
 func _ensure_placeholder_images() -> void:
 	var project_dir = ProjectSettings.globalize_path("res://")
+	var logos_dir = project_dir.path_join("storelogos")
 	var default_png = _toolchain.get_bin_dir().path_join(
 		"GameConfigEditorDependencies/default480x480.png")
 
 	if not FileAccess.file_exists(default_png):
 		push_warning("[GDK Packaging] Default PNG not found at: " + default_png)
-		return
-
-	var source_image = Image.new()
-	var err = source_image.load(default_png)
-	if err != OK:
-		push_warning("[GDK Packaging] Failed to load default PNG: " + error_string(err))
 		return
 
 	var targets := {
@@ -165,8 +160,27 @@ func _ensure_placeholder_images() -> void:
 		"SplashScreen.png": Vector2i(1920, 1080),
 	}
 
+	# Check if any images need generating
+	var any_missing := false
 	for filename in targets:
-		var dest_path = project_dir.path_join(filename)
+		if not FileAccess.file_exists(logos_dir.path_join(filename)):
+			any_missing = true
+			break
+
+	if not any_missing:
+		return
+
+	# Ensure storelogos directory exists
+	DirAccess.make_dir_recursive_absolute(logos_dir)
+
+	var source_image = Image.new()
+	var err = source_image.load(default_png)
+	if err != OK:
+		push_warning("[GDK Packaging] Failed to load default PNG: " + error_string(err))
+		return
+
+	for filename in targets:
+		var dest_path = logos_dir.path_join(filename)
 		if FileAccess.file_exists(dest_path):
 			continue
 		var img = source_image.duplicate()
@@ -174,7 +188,7 @@ func _ensure_placeholder_images() -> void:
 		img.resize(size.x, size.y, Image.INTERPOLATE_LANCZOS)
 		err = img.save_png(dest_path)
 		if err == OK:
-			print("[GDK Packaging] Created placeholder: ", filename)
+			print("[GDK Packaging] Created placeholder: storelogos/", filename)
 		else:
 			push_warning("[GDK Packaging] Failed to create " + filename + ": " + error_string(err))
 
