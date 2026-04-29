@@ -1,8 +1,23 @@
 extends Node
 ## Autoload script that initializes the shared GDK runtime and pumps async dispatch.
 
+const GDK_EXTENSION_PATH := "res://addons/godot_gdk/godot_gdk.gdextension"
+
 var _startup_user_op = null
 var _bootstrap_active := false
+var _gdk_extension = null
+
+func get_gdk():
+	if Engine.has_singleton("GDK"):
+		return Engine.get_singleton("GDK")
+
+	if _gdk_extension == null and FileAccess.file_exists(GDK_EXTENSION_PATH):
+		_gdk_extension = load(GDK_EXTENSION_PATH)
+
+	if Engine.has_singleton("GDK"):
+		return Engine.get_singleton("GDK")
+
+	return null
 
 func _ready() -> void:
 	var args := OS.get_cmdline_args()
@@ -13,20 +28,30 @@ func _ready() -> void:
 	_bootstrap_active = true
 	print("=== GodotGDK Bootstrap ===")
 
-	GDK.initialized.connect(_on_gdk_initialized)
-	GDK.runtime_error.connect(_on_gdk_runtime_error)
-	GDK.users.user_added.connect(_on_user_added)
-	GDK.users.user_removed.connect(_on_user_removed)
-	GDK.users.primary_user_changed.connect(_on_primary_user_changed)
+	var gdk = get_gdk()
+	if gdk == null:
+		push_warning("[GDK] Extension not loaded")
+		return
 
-	var init_result = GDK.initialize()
+	gdk.initialized.connect(_on_gdk_initialized)
+	gdk.runtime_error.connect(_on_gdk_runtime_error)
+	gdk.users.user_added.connect(_on_user_added)
+	gdk.users.user_removed.connect(_on_user_removed)
+	gdk.users.primary_user_changed.connect(_on_primary_user_changed)
+
+	var init_result = gdk.initialize()
 	if not init_result.ok:
 		push_warning("[GDK] %s" % init_result.message)
 
 func _on_gdk_initialized() -> void:
 	print("[GDK] Runtime initialized")
 
-	_startup_user_op = GDK.users.add_default_user_async()
+	var gdk = get_gdk()
+	if gdk == null:
+		push_warning("[GDK] Extension not loaded")
+		return
+
+	_startup_user_op = gdk.users.add_default_user_async()
 	if _startup_user_op == null:
 		push_warning("[GDK] Silent sign-in could not start")
 		return
@@ -60,9 +85,11 @@ func _on_primary_user_changed(user) -> void:
 		print("[GDK] No primary user")
 
 func _process(_delta: float) -> void:
-	if _bootstrap_active and GDK.is_initialized():
-		GDK.dispatch()
+	var gdk = get_gdk()
+	if _bootstrap_active and gdk != null and gdk.is_initialized():
+		gdk.dispatch()
 
 func _exit_tree() -> void:
-	if _bootstrap_active:
-		GDK.shutdown()
+	var gdk = get_gdk()
+	if _bootstrap_active and gdk != null:
+		gdk.shutdown()

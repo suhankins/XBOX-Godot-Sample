@@ -2,6 +2,7 @@
 
 #include "gdk_async_op.h"
 #include "gdk_dispatch_op.h"
+#include "gdk_multiplayer_activity.h"
 #include "gdk_result.h"
 #include "gdk_runtime.h"
 #include "gdk_xbox_services.h"
@@ -24,6 +25,8 @@ GDK::GDK() {
     m_users->set_owner(this);
     m_achievements.instantiate();
     m_achievements->set_owner(this);
+    m_multiplayer_activity.instantiate();
+    m_multiplayer_activity->set_owner(this);
 }
 
 GDK::~GDK() {
@@ -41,6 +44,7 @@ GDK::~GDK() {
 
     m_users.unref();
     m_achievements.unref();
+    m_multiplayer_activity.unref();
     singleton = nullptr;
 }
 
@@ -53,9 +57,11 @@ void GDK::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_last_error"), &GDK::get_last_error);
     ClassDB::bind_method(D_METHOD("get_users"), &GDK::get_users);
     ClassDB::bind_method(D_METHOD("get_achievements"), &GDK::get_achievements);
+    ClassDB::bind_method(D_METHOD("get_multiplayer_activity"), &GDK::get_multiplayer_activity);
 
     ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "users", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT, "GDKUsers"), "", "get_users");
     ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "achievements", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT, "GDKAchievements"), "", "get_achievements");
+    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "multiplayer_activity", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT, "GDKMultiplayerActivity"), "", "get_multiplayer_activity");
 
     ADD_SIGNAL(MethodInfo("initialized"));
     ADD_SIGNAL(MethodInfo("shutdown_completed"));
@@ -103,6 +109,17 @@ Ref<GDKResult> GDK::initialize(const Variant &p_config) {
         return achievements_result;
     }
 
+    Ref<GDKResult> multiplayer_activity_result = m_multiplayer_activity->on_runtime_initialized();
+    if (!multiplayer_activity_result->is_ok()) {
+        emit_runtime_error(multiplayer_activity_result);
+        m_multiplayer_activity->shutdown();
+        m_achievements->shutdown();
+        m_users->shutdown();
+        m_xbox_services->shutdown();
+        m_runtime->shutdown();
+        return multiplayer_activity_result;
+    }
+
     emit_signal("initialized");
     return GDKResult::ok_result();
 }
@@ -112,6 +129,7 @@ void GDK::shutdown() {
         return;
     }
 
+    m_multiplayer_activity->shutdown();
     m_achievements->shutdown();
     m_users->shutdown();
     m_xbox_services->shutdown();
@@ -144,6 +162,10 @@ Ref<GDKAchievements> GDK::get_achievements() const {
     return m_achievements;
 }
 
+Ref<GDKMultiplayerActivity> GDK::get_multiplayer_activity() const {
+    return m_multiplayer_activity;
+}
+
 GDKRuntime *GDK::get_runtime() const {
     return m_runtime;
 }
@@ -172,6 +194,9 @@ void GDK::notify_user_removed(const Ref<GDKUser> &p_user) {
 
     if (m_achievements.is_valid()) {
         m_achievements->on_user_removed(p_user);
+    }
+    if (m_multiplayer_activity.is_valid()) {
+        m_multiplayer_activity->on_user_removed(p_user);
     }
     if (m_xbox_services != nullptr) {
         XUserLocalId local_id = {};

@@ -7,7 +7,7 @@ A repository of Godot 4.x GDExtension addons for the Microsoft public GDK
 
 | Addon | Description | Status |
 |-------|-------------|--------|
-| [`godot_gdk`](addons/godot_gdk/) | GDK runtime, Xbox user identity, Xbox achievements | Runtime/users/achievements baseline |
+| [`godot_gdk`](addons/godot_gdk/) | GDK runtime, Xbox user identity, Xbox achievements, Xbox multiplayer activity | Runtime/users/achievements/multiplayer activity baseline |
 | [`godot_gameinput`](addons/godot_gameinput/) | Native GameInput controller support | Scaffold (build pipeline verified) |
 
 ## Quick start

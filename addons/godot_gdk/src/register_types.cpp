@@ -9,6 +9,7 @@
 #include "gdk.h"
 #include "gdk_async_op.h"
 #include "gdk_dispatch_op.h"
+#include "gdk_multiplayer_activity.h"
 #include "gdk_result.h"
 #include "gdk_user.h"
 
@@ -26,6 +27,8 @@ void initialize_gdk_extension(ModuleInitializationLevel p_level) {
         ClassDB::register_class<GDKUsers>();
         ClassDB::register_class<GDKAchievement>();
         ClassDB::register_class<GDKAchievements>();
+        ClassDB::register_class<GDKMultiplayerActivityInfo>();
+        ClassDB::register_class<GDKMultiplayerActivity>();
 
         gdk_singleton = memnew(GDK);
         Engine::get_singleton()->register_singleton("GDK", GDK::get_singleton());

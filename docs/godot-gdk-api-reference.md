@@ -25,6 +25,7 @@ accessed as namespaces under this root.
 | `get_last_error()` | `GDKResult` | Last error result |
 | `get_users()` | `GDKUsers` | Access the users service |
 | `get_achievements()` | `GDKAchievements` | Access the achievements service |
+| `get_multiplayer_activity()` | `GDKMultiplayerActivity` | Access the multiplayer activity service |
 
 ### Signals
 
@@ -176,6 +177,73 @@ Script-visible wrapper around a cached achievement.
 |--------|---------|-------------|
 | `is_unlocked()` | `bool` | Whether the achievement is fully unlocked |
 | `is_secret()` | `bool` | Whether the achievement is hidden until unlocked |
+
+## Multiplayer activity service: `GDK.multiplayer_activity`
+
+`GDK.multiplayer_activity` is a `RefCounted` service object returned by
+`GDK.get_multiplayer_activity()`.
+
+### Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `set_activity_async(user, connection_string, join_restriction, max_players, current_players, group_id, allow_cross_platform_join)` | `GDKAsyncOp` | Set the current multiplayer activity for a user |
+| `get_activities_async(user, xuids)` | `GDKAsyncOp` | Fetch activities for a list of XUIDs |
+| `get_cached_activity(xuid)` | `GDKMultiplayerActivityInfo` | Get a cached activity by XUID (or `null`) |
+| `delete_activity_async(user)` | `GDKAsyncOp` | Delete the current user's activity |
+| `send_invites_async(user, xuids, allow_cross_platform_join, connection_string)` | `GDKAsyncOp` | Send invites to the given XUIDs |
+| `show_invite_ui_async(user)` | `GDKAsyncOp` | Show the system invite UI |
+| `update_recent_players(user, xuids, encounter_type)` | `GDKResult` | Record recent-player encounters |
+| `flush_recent_players_async(user)` | `GDKAsyncOp` | Flush pending recent-player records |
+| `accept_pending_invite(invite_uri)` | `GDKResult` | Parse and accept a pending invite URI |
+
+### Signals
+
+| Signal | Description |
+|--------|-------------|
+| `activities_updated(xuids: PackedStringArray)` | One or more activities were updated in the cache |
+| `pending_invite_received(invite: Dictionary)` | A pending invite was received at startup |
+| `invite_accepted(invite: Dictionary)` | The user accepted a multiplayer invite |
+
+### Usage
+
+```gdscript
+var mpa = GDK.multiplayer_activity
+
+# Set your activity
+var op = mpa.set_activity_async(user, "myserver://connect?session=abc",
+        "followed", 4, 1)
+await op.completed
+
+# Fetch another player's activity
+var get_op = mpa.get_activities_async(user, [other_xuid])
+var result = await get_op.completed
+if result.ok:
+    var info = mpa.get_cached_activity(other_xuid)
+    print(info.get_connection_string())
+
+# React to accepted invites
+mpa.invite_accepted.connect(func(invite):
+    get_tree().change_scene_to_file("res://multiplayer.tscn")
+    # use invite["connection_string"] to connect
+)
+```
+
+## `GDKMultiplayerActivityInfo`
+
+Script-visible wrapper around a cached multiplayer activity snapshot.
+
+### Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `get_xuid()` | `String` | XUID of the player this activity belongs to |
+| `get_connection_string()` | `String` | Connection string for joining the session |
+| `get_join_restriction()` | `String` | Join restriction (`"public"`, `"followed"`, `"invite_only"`) |
+| `get_max_players()` | `int` | Maximum players in the session |
+| `get_current_players()` | `int` | Current player count |
+| `get_group_id()` | `String` | Optional group identifier |
+| `get_platform()` | `String` | Platform the activity was set from |
 
 ## Async operation types
 

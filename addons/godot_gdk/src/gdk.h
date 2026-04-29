@@ -12,6 +12,7 @@
 #include <godot_cpp/variant/variant.hpp>
 
 #include "gdk_achievement.h"
+#include "gdk_multiplayer_activity.h"
 #include "gdk_user.h"
 
 namespace godot {
@@ -31,6 +32,7 @@ class GDK : public Object {
     GDKXboxServices *m_xbox_services = nullptr;
     Ref<GDKUsers> m_users;
     Ref<GDKAchievements> m_achievements;
+    Ref<GDKMultiplayerActivity> m_multiplayer_activity;
 
 protected:
     static void _bind_methods();
@@ -49,6 +51,7 @@ public:
     Ref<GDKResult> get_last_error() const;
     Ref<GDKUsers> get_users() const;
     Ref<GDKAchievements> get_achievements() const;
+    Ref<GDKMultiplayerActivity> get_multiplayer_activity() const;
 
     GDKRuntime *get_runtime() const;
     GDKXboxServices *get_xbox_services() const;
