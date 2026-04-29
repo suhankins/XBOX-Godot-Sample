@@ -133,7 +133,50 @@ func create_template(game_name: String = "MyGodotGame",
 	file.store_string(xml)
 	file.close()
 	print("[GDK Packaging] Created template MicrosoftGame.config at: ", path)
+
+	# Generate placeholder logo images so GameConfigEditor doesn't error
+	_ensure_placeholder_images()
+
 	return OK
+
+
+## Copies the GDK default 480x480 PNG and resizes it to create all placeholder
+## images referenced by the MicrosoftGame.config template.
+func _ensure_placeholder_images() -> void:
+	var project_dir = ProjectSettings.globalize_path("res://")
+	var default_png = _toolchain.get_bin_dir().path_join(
+		"GameConfigEditorDependencies/default480x480.png")
+
+	if not FileAccess.file_exists(default_png):
+		push_warning("[GDK Packaging] Default PNG not found at: " + default_png)
+		return
+
+	var source_image = Image.new()
+	var err = source_image.load(default_png)
+	if err != OK:
+		push_warning("[GDK Packaging] Failed to load default PNG: " + error_string(err))
+		return
+
+	var targets := {
+		"Logo480.png": Vector2i(480, 480),
+		"Logo150.png": Vector2i(150, 150),
+		"Logo44.png": Vector2i(44, 44),
+		"StoreLogo.png": Vector2i(50, 50),
+		"SplashScreen.png": Vector2i(1920, 1080),
+	}
+
+	for filename in targets:
+		var dest_path = project_dir.path_join(filename)
+		if FileAccess.file_exists(dest_path):
+			continue
+		var img = source_image.duplicate()
+		var size: Vector2i = targets[filename]
+		img.resize(size.x, size.y, Image.INTERPOLATE_LANCZOS)
+		err = img.save_png(dest_path)
+		if err == OK:
+			print("[GDK Packaging] Created placeholder: ", filename)
+		else:
+			push_warning("[GDK Packaging] Failed to create " + filename + ": " + error_string(err))
 
 
 # ── GameConfigEditor Launch ─────────────────────────────────────────────────
@@ -150,6 +193,9 @@ func launch_editor() -> int:
 	if not FileAccess.file_exists(config_path):
 		push_error("[GDK Packaging] MicrosoftGame.config not found — create one first.")
 		return -1
+
+	# Ensure placeholder images exist before opening the editor
+	_ensure_placeholder_images()
 
 	var args := PackedStringArray([config_path])
 	var pid = _toolchain.launch_detached(_toolchain.get_game_config_editor_path(), args)
