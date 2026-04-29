@@ -130,10 +130,10 @@ func create_template(game_name: String = "MyGodotGame",
 	xml += '  <ShellVisuals DefaultDisplayName="%s"\n' % _escape_xml_attr(display_name)
 	xml += '                PublisherDisplayName="%s"\n' % _escape_xml_attr(publisher.replace("CN=", ""))
 	xml += '                StoreLogo="storelogos\\StoreLogo.png"\n'
-	xml += '                Square150x150Logo="storelogos\\Logo150.png"\n'
-	xml += '                Square44x44Logo="storelogos\\Logo44.png"\n'
-	xml += '                Square480x480Logo="storelogos\\Logo480.png"\n'
-	xml += '                SplashScreenImage="storelogos\\SplashScreen.png"\n'
+	xml += '                Square150x150Logo="storelogos\\Square150x150Logo.png"\n'
+	xml += '                Square44x44Logo="storelogos\\Square44x44Logo.png"\n'
+	xml += '                Square480x480Logo="storelogos\\Square480x480Logo.png"\n'
+	xml += '                SplashScreenImage="storelogos\\SplashScreenImage.png"\n'
 	xml += '                Description="A Godot game packaged with GDK"\n'
 	xml += '                BackgroundColor="#000000"\n'
 	xml += '                ForegroundText="light" />\n'
@@ -167,11 +167,11 @@ func _ensure_placeholder_images() -> void:
 		return
 
 	var targets := {
-		"Logo480.png": Vector2i(480, 480),
-		"Logo150.png": Vector2i(150, 150),
-		"Logo44.png": Vector2i(44, 44),
+		"Square480x480Logo.png": Vector2i(480, 480),
+		"Square150x150Logo.png": Vector2i(150, 150),
+		"Square44x44Logo.png": Vector2i(44, 44),
 		"StoreLogo.png": Vector2i(50, 50),
-		"SplashScreen.png": Vector2i(1920, 1080),
+		"SplashScreenImage.png": Vector2i(1920, 1080),
 	}
 
 	# Check if any images need generating
