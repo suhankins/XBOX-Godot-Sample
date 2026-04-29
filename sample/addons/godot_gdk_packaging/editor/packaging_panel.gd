@@ -114,7 +114,12 @@ func _check_and_relocate_root_logos() -> void:
 		_log("Auto-relocated %d logo(s) to storelogos/" % moved)
 		# Update config paths to point to storelogos/
 		_config_mgr.relocate_logos_to_storelogos()
-		# Trigger filesystem rescan
+		# Remove stale .import files in storelogos/ so thumbnails regenerate
+		for filename in ROOT_LOGO_FILES:
+			var import_file = logos_dir.path_join(filename + ".import")
+			if FileAccess.file_exists(import_file):
+				dir.remove(import_file)
+		# Trigger filesystem rescan to reimport and refresh thumbnails
 		var fs = EditorInterface.get_resource_filesystem()
 		if not fs.is_scanning():
 			fs.scan()
