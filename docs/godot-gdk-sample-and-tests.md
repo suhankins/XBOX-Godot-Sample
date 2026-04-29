@@ -11,9 +11,7 @@ See also:
 
 The sample projects are the easiest place to see how the plugin is expected to be used in Godot.
 
-`sample\` remains the baseline runtime/users/achievements demo, while `sample_shamwow\` is a ShamWow-inspired scenario browser that groups runtime, users, achievements, and multiplayer activity actions behind nested navigation and a persistent event log.
-
-Both act as integration targets for the addon's synced binaries and editor metadata.
+It currently exercises the runtime/users/achievements/presence/social baseline and acts as the main integration target for the addon's synced binaries and editor metadata.
 
 ## Autoload bootstrap
 
@@ -34,7 +32,7 @@ That means the sample currently treats `GDK.dispatch()` as a per-frame pump mana
 
 ## Demo scene
 
-`sample\main.gd` is a minimal runtime/users/achievements demo layered onto the existing sample scene.
+`sample\main.gd` is a minimal runtime/users/achievements/presence/social demo layered onto the existing sample scene.
 
 It currently:
 
@@ -44,8 +42,12 @@ It currently:
 - queries the achievements cache for achievement `1`
 - advances achievement `1` in 25% steps through `GDK.achievements.update_achievement_async()`
 - shows the current cached progress for achievement `1`
+- queries and shows the primary user's cached presence state
+- starts the Social Manager graph for the primary user
+- requests the default friends group through `GDK.social.get_friends_async()`
+- shows the current tracked friend count for that group
 
-The older controller widgets are still present in the scene tree, but the script hides them because those native subsystems are not part of the current baseline.
+The older controller widgets are still present in the scene tree, but the script now reuses one of the previously hidden text areas for the presence/social summary because controller-native functionality is still not part of the current baseline.
 
 `sample_shamwow\main.gd` instead builds a scenario catalog with grouped runtime, users, achievements, and multiplayer activity actions. It mirrors ShamWow conceptually through:
 
@@ -63,19 +65,15 @@ It checks:
 
 - singleton availability
 - class registration
-- root API shape
-- users API shape
-- achievements API shape
+- root API shape plus lifecycle/reset behavior
+- users API shape plus real default-user flow when a local user is available
+- achievements API shape plus live query/update validation against a signed-in user when services are available
+- presence API shape plus caller-context and input-validation behavior
+- social API shape plus graph/group behavior against a signed-in user when services are available
 - signal connectivity
 - addon structure
 
-It also verifies an important runtime behavior:
-
-- if users methods are called before initialization, they still return a `GDKAsyncOp`
-- if achievements methods are called before initialization, they still return a `GDKDispatchOp`
-- that op is already completed with an error result
-
-This keeps the public async shape stable even when the runtime is unavailable.
+The suite is now split into focused modules with a shared test context so it can exercise real runtime behavior, async completion, and signed-in user flows when the environment supports them, while still checking deterministic validation/error paths on machines that cannot complete Xbox sign-in.
 
 ## Why the sample and tests matter
 
@@ -85,6 +83,6 @@ They validate that:
 
 - the addon loads correctly in Godot
 - the `GDK` singleton is present
-- the runtime/users/achievements baseline is script-usable
+- the runtime/users/achievements/presence/social baseline is script-usable
 - the dispatch model is compatible with a normal Godot frame pump
-- immediate error paths still preserve the async API contract
+- deterministic validation and unavailable-environment paths still surface stable Godot-facing results
