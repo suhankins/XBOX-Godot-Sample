@@ -7,6 +7,10 @@ function(gdk_detect_dependencies)
         GDK_WINDOWS_OUT
         XSAPI_RUNTIME_DLL_OUT
         LIBHTTPCLIENT_RUNTIME_DLL_OUT
+        PLAYFAB_CORE_RUNTIME_DLL_OUT
+        PLAYFAB_SERVICES_RUNTIME_DLL_OUT
+        PLAYFAB_MULTIPLAYER_RUNTIME_DLL_OUT
+        PLAYFAB_PARTY_RUNTIME_DLL_OUT
     )
     cmake_parse_arguments(ARG "" "${one_value_args}" "" ${ARGN})
 
@@ -58,6 +62,18 @@ function(gdk_detect_dependencies)
             "Ensure the GDK is installed with Xbox Extensions.")
     endif()
 
+    if(NOT EXISTS "${GDK_WINDOWS}/include/playfab/multiplayer/PFMultiplayer.h")
+        message(FATAL_ERROR
+            "PlayFab Multiplayer headers not found in: ${GDK_WINDOWS}/include/playfab/multiplayer/\n"
+            "Ensure the GDK is installed with Xbox Extensions.")
+    endif()
+
+    if(NOT EXISTS "${GDK_WINDOWS}/include/playfab/party/Party.h")
+        message(FATAL_ERROR
+            "PlayFab Party headers not found in: ${GDK_WINDOWS}/include/playfab/party/\n"
+            "Ensure the GDK is installed with Xbox Extensions.")
+    endif()
+
     message(STATUS "GDK windows layout: ${GDK_WINDOWS}")
 
     if(ARG_GDK_WINDOWS_OUT)
@@ -65,10 +81,41 @@ function(gdk_detect_dependencies)
     endif()
 
     if(ARG_XSAPI_RUNTIME_DLL_OUT)
-        set(${ARG_XSAPI_RUNTIME_DLL_OUT} "${GDK_WINDOWS}/bin/x64/Microsoft.Xbox.Services.C.Thunks$<$<CONFIG:Debug>:.Debug>.dll" PARENT_SCOPE)
+        get_filename_component(_GDK_ROOT "${GDK_WINDOWS}" DIRECTORY)
+        set(_XSAPI_GDK_RUNTIME_DEBUG "${_GDK_ROOT}/GRDK/ExtensionLibraries/Xbox.Services.API.C/Lib/x64/Debug/Microsoft.Xbox.Services.GDK.C.Thunks.dll")
+        set(_XSAPI_GDK_RUNTIME_RELEASE "${_GDK_ROOT}/GRDK/ExtensionLibraries/Xbox.Services.API.C/Lib/x64/Release/Microsoft.Xbox.Services.GDK.C.Thunks.dll")
+
+        if(EXISTS "${_XSAPI_GDK_RUNTIME_DEBUG}" AND EXISTS "${_XSAPI_GDK_RUNTIME_RELEASE}")
+            set(${ARG_XSAPI_RUNTIME_DLL_OUT} "$<IF:$<CONFIG:Debug>,${_XSAPI_GDK_RUNTIME_DEBUG},${_XSAPI_GDK_RUNTIME_RELEASE}>" PARENT_SCOPE)
+        else()
+            set(${ARG_XSAPI_RUNTIME_DLL_OUT} "${GDK_WINDOWS}/bin/x64/Microsoft.Xbox.Services.C.Thunks$<$<CONFIG:Debug>:.Debug>.dll" PARENT_SCOPE)
+        endif()
     endif()
 
     if(ARG_LIBHTTPCLIENT_RUNTIME_DLL_OUT)
-        set(${ARG_LIBHTTPCLIENT_RUNTIME_DLL_OUT} "${GDK_WINDOWS}/bin/x64/libHttpClient.dll" PARENT_SCOPE)
+        get_filename_component(_GDK_ROOT "${GDK_WINDOWS}" DIRECTORY)
+        set(_LIBHTTPCLIENT_GDK_RUNTIME "${_GDK_ROOT}/GRDK/ExtensionLibraries/Xbox.LibHttpClient/Redist/x64/libHttpClient.GDK.dll")
+
+        if(EXISTS "${_LIBHTTPCLIENT_GDK_RUNTIME}")
+            set(${ARG_LIBHTTPCLIENT_RUNTIME_DLL_OUT} "${_LIBHTTPCLIENT_GDK_RUNTIME}" PARENT_SCOPE)
+        else()
+            set(${ARG_LIBHTTPCLIENT_RUNTIME_DLL_OUT} "${GDK_WINDOWS}/bin/x64/libHttpClient.dll" PARENT_SCOPE)
+        endif()
+    endif()
+
+    if(ARG_PLAYFAB_CORE_RUNTIME_DLL_OUT)
+        set(${ARG_PLAYFAB_CORE_RUNTIME_DLL_OUT} "${GDK_WINDOWS}/bin/x64/PlayFabCore.dll" PARENT_SCOPE)
+    endif()
+
+    if(ARG_PLAYFAB_SERVICES_RUNTIME_DLL_OUT)
+        set(${ARG_PLAYFAB_SERVICES_RUNTIME_DLL_OUT} "${GDK_WINDOWS}/bin/x64/PlayFabServices.dll" PARENT_SCOPE)
+    endif()
+
+    if(ARG_PLAYFAB_MULTIPLAYER_RUNTIME_DLL_OUT)
+        set(${ARG_PLAYFAB_MULTIPLAYER_RUNTIME_DLL_OUT} "${GDK_WINDOWS}/bin/x64/PlayFabMultiplayer.dll" PARENT_SCOPE)
+    endif()
+
+    if(ARG_PLAYFAB_PARTY_RUNTIME_DLL_OUT)
+        set(${ARG_PLAYFAB_PARTY_RUNTIME_DLL_OUT} "${GDK_WINDOWS}/bin/x64/Party.dll" PARENT_SCOPE)
     endif()
 endfunction()
