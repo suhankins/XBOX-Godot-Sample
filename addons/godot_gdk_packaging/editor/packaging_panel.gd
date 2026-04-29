@@ -24,7 +24,6 @@ var _content_id_edit: LineEdit
 var _product_id_edit: LineEdit
 var _encrypt_option: OptionButton
 var _encrypt_key_edit: LineEdit
-var _encrypt_key_browse: Button
 var _updcompat_option: OptionButton
 
 # Config status

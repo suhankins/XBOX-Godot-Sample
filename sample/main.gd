@@ -73,7 +73,7 @@ func _ready() -> void:
 func _refresh_state() -> void:
 	var gdk = GDKBootstrap.get_gdk()
 	if gdk != null and gdk.is_initialized():
-		status_label.text = "GDK: Initialized Γ£ô"
+		status_label.text = "GDK: Initialized ✓"
 		sign_in_button.disabled = false
 	elif gdk != null:
 		status_label.text = "GDK: Not initialized"
@@ -101,7 +101,7 @@ func _show_user(user) -> void:
 	var age_group_text: String = user.get_age_group_name()
 	gamertag_label.text = user.gamertag
 	xuid_label.text = "XUID: %s" % user.xuid
-	user_label.text = "State: %s ΓÇó Age: %s ΓÇó Store user: %s" % [sign_in_state_text, age_group_text, store_user_text]
+	user_label.text = "State: %s • Age: %s • Store user: %s" % [sign_in_state_text, age_group_text, store_user_text]
 	sign_in_button.text = "User Ready"
 	sign_in_button.disabled = true
 	_load_gamer_picture(user)
@@ -221,7 +221,7 @@ func _on_sign_in_completed(result) -> void:
 		return
 
 	if result.ok and result.data:
-		status_label.text = "GDK: User ready Γ£ô"
+		status_label.text = "GDK: User ready ✓"
 		_show_user(result.data)
 	else:
 		status_label.text = "GDK: Silent sign-in unavailable: %s" % result.message
@@ -231,7 +231,7 @@ func _on_sign_in_completed(result) -> void:
 
 func _on_runtime_initialized() -> void:
 	var gdk = GDKBootstrap.get_gdk()
-	status_label.text = "GDK: Initialized Γ£ô"
+	status_label.text = "GDK: Initialized ✓"
 	if gdk != null and not gdk.users.get_primary_user():
 		sign_in_button.text = "Retry Silent Sign-In"
 		sign_in_button.disabled = false
@@ -301,7 +301,7 @@ func _presence_summary_text(presence) -> String:
 		var title_record: Dictionary = title_records[0]
 		var rich_presence := String(title_record.get("rich_presence_string", ""))
 		if rich_presence != "":
-			summary += " %s" % rich_presence
+			summary += " — %s" % rich_presence
 	return summary
 
 func _refresh_social_ui() -> void:
@@ -398,7 +398,7 @@ func _format_mpa_activity(activity) -> String:
 	var player_text = "%d/%d players" % [current_players, max_players] if max_players > 0 else "%d players" % current_players
 	var restriction_text = activity.join_restriction if activity.join_restriction != "" else "unknown"
 	var group_text = activity.group_id if activity.group_id != "" else "no-group"
-	return "Activity ready · %s · %s · %s" % [player_text, restriction_text, group_text]
+	return "Activity ready • %s • %s • %s" % [player_text, restriction_text, group_text]
 
 func _format_invite_event(invite) -> String:
 	if typeof(invite) != TYPE_DICTIONARY:
@@ -492,10 +492,10 @@ func _on_mpa_set_pressed() -> void:
 
 func _on_mpa_set_completed(result) -> void:
 	if result != null and result.ok:
-		status_label.text = "GDK: Multiplayer activity ready Γ£ô"
+		status_label.text = "GDK: Multiplayer activity ready ✓"
 	else:
 		status_label.text = "GDK: Multiplayer activity failed: %s" % result.message
-		_refresh_mpa_ui()
+	_refresh_mpa_ui()
 
 func _on_mpa_clear_pressed() -> void:
 	if _mpa_delete_op != null and not _mpa_delete_op.is_done():
@@ -556,12 +556,12 @@ func _on_mpa_activities_updated(xuids: PackedStringArray) -> void:
 		_refresh_mpa_ui()
 
 func _on_pending_invite_received(invite: Dictionary) -> void:
-	_last_mpa_event_text = "Pending invite ΓÇö %s" % _format_invite_event(invite)
+	_last_mpa_event_text = "Pending invite — %s" % _format_invite_event(invite)
 	status_label.text = "GDK: Pending invite received"
 	_refresh_mpa_ui()
 
 func _on_invite_accepted(invite: Dictionary) -> void:
-	_last_mpa_event_text = "Accepted invite ΓÇö %s" % _format_invite_event(invite)
+	_last_mpa_event_text = "Accepted invite — %s" % _format_invite_event(invite)
 	status_label.text = "GDK: Invite accepted"
 	_refresh_mpa_ui()
 
@@ -640,7 +640,7 @@ func _on_achievements_updated(user) -> void:
 
 func _on_achievement_unlocked(user, achievement_id: String) -> void:
 	if _is_primary_user(user) and achievement_id == DEMO_ACHIEVEMENT_ID:
-		status_label.text = "GDK: Achievement %s unlocked Γ£ô" % DEMO_ACHIEVEMENT_ID
+		status_label.text = "GDK: Achievement %s unlocked ✓" % DEMO_ACHIEVEMENT_ID
 		_refresh_achievement_ui()
 		_refresh_mpa_ui()
 

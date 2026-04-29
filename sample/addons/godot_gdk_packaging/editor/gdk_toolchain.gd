@@ -39,6 +39,7 @@ func execute_tool(exe_path: String, args: PackedStringArray) -> Dictionary:
 		return { "exit_code": -1, "stdout": "", "stderr": "Tool not found: " + exe_path }
 
 	var output: Array = []
+	# read_stderr=false: Godot merges stderr into stdout in output[0]
 	var exit_code := OS.execute(exe_path, args, output, true, false)
 
 	var stdout_text := ""
@@ -48,7 +49,7 @@ func execute_tool(exe_path: String, args: PackedStringArray) -> Dictionary:
 	return {
 		"exit_code": exit_code,
 		"stdout": stdout_text,
-		"stderr": ""  # OS.execute merges stderr into stdout
+		"stderr": ""  # stderr is merged into stdout by OS.execute
 	}
 
 
