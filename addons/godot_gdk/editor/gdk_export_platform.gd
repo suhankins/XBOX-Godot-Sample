@@ -340,7 +340,7 @@ func _detect_gdk() -> void:
 	for raw_root in [OS.get_environment("GameDKCoreLatest"), OS.get_environment("GameDKLatest")]:
 		if raw_root == "":
 			continue
-		var normalized_root := raw_root.trim_suffix("\\").trim_suffix("/")
+		var normalized_root: String = raw_root.trim_suffix("\\").trim_suffix("/")
 		if not edition_roots.has(normalized_root):
 			edition_roots.append(normalized_root)
 
