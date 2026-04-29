@@ -1,11 +1,13 @@
 @tool
 extends Control
-## Dock panel UI for GDK PC packaging — configures makepkg flags, runs
-## genmap / validate / pack, and manages MicrosoftGame.config.
+## GDK dock panel — manages MicrosoftGame.config, store logos, PC packaging
+## via makepkg, and achievements configuration.
 
 const GDKToolchainScript = preload("res://addons/godot_gdk_packaging/editor/gdk_toolchain.gd")
 const MakePkgExecutorScript = preload("res://addons/godot_gdk_packaging/editor/makepkg_executor.gd")
 const GameConfigManagerScript = preload("res://addons/godot_gdk_packaging/editor/game_config_manager.gd")
+
+const SAMPLE_CONFIG_PATH := "res://sample_config.cfg"
 
 var _toolchain: RefCounted
 var _makepkg: RefCounted
@@ -36,6 +38,11 @@ var _create_config_btn: Button
 var _genmap_btn: Button
 var _validate_btn: Button
 var _pack_btn: Button
+
+# Achievements
+var _achievement_id_edit: LineEdit
+var _achievement_save_btn: Button
+var _achievement_status_label: Label
 
 # Output
 var _status_label: Label
@@ -136,7 +143,7 @@ func _build_ui() -> void:
 
 	# ── Header ──
 	var title := Label.new()
-	title.text = "GDK PC Packaging"
+	title.text = "GDK Tools"
 	title.add_theme_font_size_override("font_size", 18)
 	root.add_child(title)
 
@@ -287,7 +294,33 @@ func _build_ui() -> void:
 
 	root.add_child(HSeparator.new())
 
+	# ── Achievements ──
+	_add_section_header(root, "Achievements")
+
+	var ach_row := HBoxContainer.new()
+	root.add_child(ach_row)
+	var ach_label := Label.new()
+	ach_label.text = "Demo Achievement ID"
+	ach_label.custom_minimum_size.x = 130
+	ach_row.add_child(ach_label)
+	_achievement_id_edit = LineEdit.new()
+	_achievement_id_edit.placeholder_text = "Achievement ID to test (e.g. 1)"
+	_achievement_id_edit.size_flags_horizontal = SIZE_EXPAND_FILL
+	ach_row.add_child(_achievement_id_edit)
+
+	var ach_btn_row := HBoxContainer.new()
+	root.add_child(ach_btn_row)
+	_achievement_save_btn = Button.new()
+	_achievement_save_btn.text = "Save to Config"
+	_achievement_save_btn.pressed.connect(_on_achievement_save)
+	ach_btn_row.add_child(_achievement_save_btn)
+
+	_achievement_status_label = Label.new()
+	_achievement_status_label.text = ""
+	root.add_child(_achievement_status_label)
+
 	_set_actions_enabled(_toolchain.is_gdk_available())
+	_load_achievement_config()
 
 
 # ── UI Helpers ──────────────────────────────────────────────────────────────
@@ -507,3 +540,28 @@ func _on_pack() -> void:
 	_log("Creating MSIXVC package...")
 	var result = _makepkg.pack(source, map_file, output, options)
 	_log_result(result)
+
+
+# ── Achievements ────────────────────────────────────────────────────────────
+
+func _load_achievement_config() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load(SAMPLE_CONFIG_PATH) == OK:
+		var val = cfg.get_value("achievements", "demo_achievement_id", "")
+		_achievement_id_edit.text = str(val)
+		_achievement_status_label.text = "Loaded from sample_config.cfg"
+	else:
+		_achievement_status_label.text = "No sample_config.cfg — enter a value and save."
+
+func _on_achievement_save() -> void:
+	var cfg := ConfigFile.new()
+	# Load existing config to preserve other fields
+	cfg.load(SAMPLE_CONFIG_PATH)
+	cfg.set_value("achievements", "demo_achievement_id", _achievement_id_edit.text.strip_edges())
+	var err = cfg.save(SAMPLE_CONFIG_PATH)
+	if err == OK:
+		_achievement_status_label.text = "✅ Saved to sample_config.cfg"
+		_log("Achievement config saved")
+	else:
+		_achievement_status_label.text = "Failed to save: " + error_string(err)
+		push_error("[GDK] Failed to save achievement config: " + error_string(err))

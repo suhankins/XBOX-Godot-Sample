@@ -70,7 +70,7 @@ func _enter_tree() -> void:
 
 	# ── Packaging dock panel ──
 	_packaging_panel = PackagingPanel.new()
-	_packaging_panel.name = "GDK Packaging"
+	_packaging_panel.name = "GDK"
 	add_control_to_dock(DOCK_SLOT_RIGHT_BL, _packaging_panel)
 
 	if not _toolchain.is_gdk_available():
