@@ -3,9 +3,11 @@ extends Node2D
 signal game_finished()
 
 const SCORE_TO_WIN = 10
+const AI_PADDLE_SCRIPT = preload("res://logic/ai_paddle.gd")
 
 var score_left := 0
 var score_right := 0
+var is_single_player := false
 
 @onready var player2: Area2D = $Player2
 @onready var score_left_node: Label = $ScoreLeft
@@ -14,15 +16,16 @@ var score_right := 0
 @onready var winner_right: Label = $WinnerRight
 
 func _ready() -> void:
-	# By default, all nodes in server inherit from master,
-	# while all nodes in clients inherit from puppet.
-	# set_multiplayer_authority is tree-recursive by default.
-	if multiplayer.is_server():
-		# For the server, give control of player 2 to the other peer.
-		player2.set_multiplayer_authority(multiplayer.get_peers()[0])
+	if is_single_player:
+		# Replace Player2's script with AI.
+		player2.set_script(AI_PADDLE_SCRIPT)
+		if player2.has_node("You"):
+			player2.get_node("You").hide()
 	else:
-		# For the client, give control of player 2 to itself.
-		player2.set_multiplayer_authority(multiplayer.get_unique_id())
+		if multiplayer.is_server():
+			player2.set_multiplayer_authority(multiplayer.get_peers()[0])
+		else:
+			player2.set_multiplayer_authority(multiplayer.get_unique_id())
 
 	print("Unique id: ", multiplayer.get_unique_id())
 
@@ -46,7 +49,10 @@ func update_score(add_to_left: int) -> void:
 
 	if game_ended:
 		$ExitGame.show()
-		$Ball.stop.rpc()
+		if is_single_player:
+			$Ball.stop()
+		else:
+			$Ball.stop.rpc()
 
 
 func _on_exit_game_pressed() -> void:

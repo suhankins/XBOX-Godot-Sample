@@ -9,9 +9,21 @@ var _you_hidden: bool = false
 
 @onready var _screen_size_y := get_viewport_rect().size.y
 
+
+func _is_local_game() -> bool:
+	return multiplayer.multiplayer_peer == null or multiplayer.multiplayer_peer is OfflineMultiplayerPeer
+
+
 func _process(delta: float) -> void:
-	# Is the master of the paddle.
-	if is_multiplayer_authority():
+	if _is_local_game():
+		# Single-player: player always controls this paddle directly.
+		_motion = Input.get_axis(&"move_up", &"move_down")
+
+		if not _you_hidden and _motion != 0:
+			_hide_you_label()
+
+		_motion *= MOTION_SPEED
+	elif is_multiplayer_authority():
 		_motion = Input.get_axis(&"move_up", &"move_down")
 
 		if not _you_hidden and _motion != 0:
@@ -45,6 +57,8 @@ func _hide_you_label() -> void:
 
 
 func _on_paddle_area_enter(area: Area2D) -> void:
-	if is_multiplayer_authority():
-		# Random for new direction generated checked each peer.
-		area.bounce.rpc(left, randf())
+	if _is_local_game() or is_multiplayer_authority():
+		if _is_local_game():
+			area.bounce(left, randf())
+		else:
+			area.bounce.rpc(left, randf())

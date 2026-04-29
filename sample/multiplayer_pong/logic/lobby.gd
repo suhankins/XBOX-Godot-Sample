@@ -8,6 +8,7 @@ const DEFAULT_PORT = 8910
 @onready var address: LineEdit = $Address
 @onready var host_button: Button = $HostButton
 @onready var join_button: Button = $JoinButton
+@onready var single_player_button: Button = $SinglePlayerButton
 @onready var status_ok: Label = $StatusOk
 @onready var status_fail: Label = $StatusFail
 @onready var port_forward_label: Label = $PortForward
@@ -26,13 +27,7 @@ func _ready() -> void:
 #region Network callbacks from SceneTree
 # Callback from SceneTree.
 func _player_connected(_id: int) -> void:
-	# Someone connected, start the game!
-	var pong: Node2D = load("res://pong.tscn").instantiate()
-	# Connect deferred so we can safely erase it from the callback.
-	pong.game_finished.connect(_end_game, CONNECT_DEFERRED)
-
-	get_tree().get_root().add_child(pong)
-	hide()
+	_start_game(false)
 
 
 func _player_disconnected(_id: int) -> void:
@@ -52,8 +47,7 @@ func _connected_fail() -> void:
 	_set_status("Couldn't connect.", false)
 
 	multiplayer.set_multiplayer_peer(null)  # Remove peer.
-	host_button.set_disabled(false)
-	join_button.set_disabled(false)
+	_set_buttons_disabled(false)
 
 
 func _server_disconnected() -> void:
@@ -61,6 +55,15 @@ func _server_disconnected() -> void:
 #endregion
 
 #region Game creation methods
+func _start_game(single_player: bool) -> void:
+	var pong: Node2D = load("res://pong.tscn").instantiate()
+	pong.is_single_player = single_player
+	pong.game_finished.connect(_end_game, CONNECT_DEFERRED)
+
+	get_tree().get_root().add_child(pong)
+	hide()
+
+
 func _end_game(with_error: String = "") -> void:
 	if has_node(^"/root/Pong"):
 		# Erase immediately, otherwise network might show
@@ -69,10 +72,15 @@ func _end_game(with_error: String = "") -> void:
 		show()
 
 	multiplayer.set_multiplayer_peer(null)  # Remove peer.
-	host_button.set_disabled(false)
-	join_button.set_disabled(false)
+	_set_buttons_disabled(false)
 
 	_set_status(with_error, false)
+
+
+func _set_buttons_disabled(disabled: bool) -> void:
+	host_button.set_disabled(disabled)
+	join_button.set_disabled(disabled)
+	single_player_button.set_disabled(disabled)
 
 
 func _set_status(text: String, is_ok: bool) -> void:
@@ -83,6 +91,12 @@ func _set_status(text: String, is_ok: bool) -> void:
 	else:
 		status_ok.set_text("")
 		status_fail.set_text(text)
+
+
+func _on_single_player_pressed() -> void:
+	_set_buttons_disabled(true)
+	_start_game(true)
+	get_window().title = ProjectSettings.get_setting("application/config/name") + ": Single Player"
 
 
 func _on_host_pressed() -> void:
@@ -96,8 +110,7 @@ func _on_host_pressed() -> void:
 	peer.get_host().compress(ENetConnection.COMPRESS_RANGE_CODER)
 
 	multiplayer.set_multiplayer_peer(peer)
-	host_button.set_disabled(true)
-	join_button.set_disabled(true)
+	_set_buttons_disabled(true)
 	_set_status("Waiting for player...", true)
 	get_window().title = ProjectSettings.get_setting("application/config/name") + ": Server"
 

@@ -46,9 +46,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -110.0
-offset_top = -73.0
+offset_top = -90.0
 offset_right = 110.0
-offset_bottom = 73.0
+offset_bottom = 90.0
 grow_horizontal = 2
 grow_vertical = 2
 size_flags_horizontal = 2
@@ -95,12 +95,22 @@ size_flags_horizontal = 2
 size_flags_vertical = 2
 text = "Join"
 
+[node name="SinglePlayerButton" type="Button" parent="LobbyPanel"]
+layout_mode = 0
+offset_left = 10.0
+offset_top = 112.0
+offset_right = 210.0
+offset_bottom = 143.0
+size_flags_horizontal = 2
+size_flags_vertical = 2
+text = "Single Player"
+
 [node name="StatusOk" type="Label" parent="LobbyPanel" unique_id=2054123495]
 layout_mode = 0
 offset_left = 10.0
-offset_top = 114.0
+offset_top = 150.0
 offset_right = 210.0
-offset_bottom = 137.0
+offset_bottom = 173.0
 size_flags_horizontal = 2
 size_flags_vertical = 0
 horizontal_alignment = 1
@@ -109,9 +119,9 @@ horizontal_alignment = 1
 modulate = Color(1, 0.427451, 0.345098, 1)
 layout_mode = 0
 offset_left = 10.0
-offset_top = 114.0
+offset_top = 150.0
 offset_right = 210.0
-offset_bottom = 137.0
+offset_bottom = 173.0
 size_flags_horizontal = 2
 size_flags_vertical = 0
 horizontal_alignment = 1
@@ -152,4 +162,5 @@ text = "Find your public IP address"
 
 [connection signal="pressed" from="LobbyPanel/HostButton" to="LobbyPanel" method="_on_host_pressed"]
 [connection signal="pressed" from="LobbyPanel/JoinButton" to="LobbyPanel" method="_on_join_pressed"]
+[connection signal="pressed" from="LobbyPanel/SinglePlayerButton" to="LobbyPanel" method="_on_single_player_pressed"]
 [connection signal="pressed" from="LobbyPanel/FindPublicIP" to="LobbyPanel" method="_on_find_public_ip_pressed"]
