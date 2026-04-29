@@ -82,6 +82,16 @@ func parse_config() -> Dictionary:
 						result["display_name"] = parser.get_attribute_value(i)
 					"Description":
 						result["description"] = parser.get_attribute_value(i)
+					"Square480x480Logo":
+						result["logo_480"] = parser.get_attribute_value(i)
+					"Square150x150Logo":
+						result["logo_150"] = parser.get_attribute_value(i)
+					"Square44x44Logo":
+						result["logo_44"] = parser.get_attribute_value(i)
+					"StoreLogo":
+						result["store_logo"] = parser.get_attribute_value(i)
+					"SplashScreenImage":
+						result["splash_screen"] = parser.get_attribute_value(i)
 
 		# ProductId can appear as an attribute on the MSStore element
 		elif node_name == "MSStore":
@@ -195,6 +205,65 @@ func _ensure_placeholder_images() -> void:
 			print("[GDK Packaging] Created placeholder: storelogos/", filename)
 		else:
 			push_warning("[GDK Packaging] Failed to create " + filename + ": " + error_string(err))
+
+
+## Reads the largest logo (480x480) from the config and regenerates all other
+## logo sizes from it. Call after GameConfigEditor saves changes.
+## Returns the number of logos updated.
+func sync_store_logos() -> int:
+	if not config_exists():
+		return 0
+
+	var info = parse_config()
+	var project_dir = ProjectSettings.globalize_path("res://")
+
+	# Find the 480x480 source logo — this is the primary logo to derive others from
+	var logo_480_rel: String = info.get("logo_480", "")
+	if logo_480_rel == "":
+		return 0
+
+	# Resolve relative path (config paths use backslashes)
+	var logo_480_path = project_dir.path_join(logo_480_rel.replace("\\", "/"))
+	if not FileAccess.file_exists(logo_480_path):
+		print("[GDK Packaging] 480x480 logo not found at: ", logo_480_path)
+		return 0
+
+	var source_image = Image.new()
+	var err = source_image.load(logo_480_path)
+	if err != OK:
+		push_warning("[GDK Packaging] Failed to load 480x480 logo: " + error_string(err))
+		return 0
+
+	# Map config keys to their sizes
+	var logo_map := {
+		"logo_150": Vector2i(150, 150),
+		"logo_44": Vector2i(44, 44),
+		"store_logo": Vector2i(50, 50),
+		"splash_screen": Vector2i(1920, 1080),
+	}
+
+	var updated := 0
+	for key in logo_map:
+		var rel_path: String = info.get(key, "")
+		if rel_path == "":
+			continue
+		var dest_path = project_dir.path_join(rel_path.replace("\\", "/"))
+
+		# Ensure the destination directory exists
+		var dest_dir = dest_path.get_base_dir()
+		DirAccess.make_dir_recursive_absolute(dest_dir)
+
+		var img = source_image.duplicate()
+		var size: Vector2i = logo_map[key]
+		img.resize(size.x, size.y, Image.INTERPOLATE_LANCZOS)
+		err = img.save_png(dest_path)
+		if err == OK:
+			updated += 1
+			print("[GDK Packaging] Synced logo: ", rel_path)
+		else:
+			push_warning("[GDK Packaging] Failed to sync " + rel_path + ": " + error_string(err))
+
+	return updated
 
 
 # ── GameConfigEditor Launch ─────────────────────────────────────────────────

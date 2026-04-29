@@ -333,6 +333,11 @@ func _refresh_config_status() -> void:
 				_product_id_edit.text = info["product_id"]
 		else:
 			_config_identity_label.text = "(could not parse identity)"
+
+		# Sync store logos — regenerate all sizes from the 480x480 source
+		var synced = _config_mgr.sync_store_logos()
+		if synced > 0:
+			_log("Synced %d store logo(s) from 480x480 source" % synced)
 	else:
 		_config_status_label.text = "⚠️ MicrosoftGame.config not found"
 		_config_identity_label.text = "Create a template or use GameConfigEditor to get started."
