@@ -193,7 +193,7 @@ func _build_ui() -> void:
 	root.add_child(HSeparator.new())
 
 	# ── Source Configuration ──
-	_add_section_header(root, "Source Configuration")
+	_add_section_header(root, "Package Source Configuration")
 
 	_source_dir_edit = _add_path_field(root, "Content Directory",
 		"Directory with exported game files", true)
@@ -272,7 +272,7 @@ func _build_ui() -> void:
 	root.add_child(HSeparator.new())
 
 	# ── Action Buttons ──
-	_add_section_header(root, "Actions")
+	_add_section_header(root, "Packaging Actions")
 
 	var action_row := HBoxContainer.new()
 	root.add_child(action_row)
@@ -295,7 +295,7 @@ func _build_ui() -> void:
 	root.add_child(HSeparator.new())
 
 	# ── Achievements ──
-	_add_section_header(root, "Achievements")
+	_add_section_header(root, "Achievements Demo")
 
 	var ach_row := HBoxContainer.new()
 	root.add_child(ach_row)
