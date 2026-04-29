@@ -88,6 +88,13 @@ cmake --build build --preset debug
 > features (sign-in, achievements) require additional Partner Center setup —
 > see [Sample Project Setup](godot-gdk-sample-setup.md).
 
+Other samples can be launched the same way:
+
+```powershell
+.\sample\shamwow\launch_editor.bat           # ShamWow scenario shell
+.\sample\multiplayer_pong\launch_editor.bat   # Multiplayer pong
+```
+
 ## VS Code setup
 
 After building, VS Code IntelliSense should work automatically with the
