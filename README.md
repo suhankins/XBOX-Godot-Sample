@@ -9,6 +9,7 @@ A repository of Godot 4.x GDExtension addons for the Microsoft public GDK
 |-------|-------------|--------|
 | [`godot_gdk`](addons/godot_gdk/) | GDK runtime, Xbox user identity, Xbox achievements, Xbox presence, Xbox social graph, Xbox multiplayer activity | Runtime/users/achievements/presence/social/multiplayer-activity baseline |
 | [`godot_gameinput`](addons/godot_gameinput/) | Native GameInput controller support | Scaffold (build pipeline verified) |
+| [`godot_gdk_packaging`](addons/godot_gdk_packaging/) | GDScript editor plugin for PC MSIXVC packaging via `makepkg.exe` | Editor plugin (no C++ build) |
 
 ## Quick start
 
@@ -56,6 +57,7 @@ git config core.hooksPath .githooks
 ```
 addons/godot_gdk/         # GDK addon: metadata, editor scripts, native sources
 addons/godot_gameinput/   # GameInput addon: metadata, native sources
+addons/godot_gdk_packaging/ # Pure GDScript editor plugin for PC packaging
 cmake/                    # Shared CMake helpers
 docs/                     # Documentation
 godot-cpp/                # godot-cpp submodule
@@ -114,6 +116,35 @@ func _exit_tree():
 ```
 
 See the [API Reference](docs/godot-gdk-api-reference.md) for the full surface.
+
+## GDK Packaging Addon
+
+The `godot_gdk_packaging` addon is a pure GDScript editor plugin (no C++ build required) that
+wraps Microsoft GDK PC packaging tools into the Godot Editor.
+
+### Features
+
+- **GDK Packaging toolbar menu** with quick access to all tools and documentation
+- **MSIXVC Package Creation** — configure makepkg flags and create PC packages from the editor
+- **Mapping File Generation** — auto-generate layout.xml via `makepkg genmap`
+- **Package Validation** — dry-run validation before building
+- **MicrosoftGame.config Management** — create templates, parse identity, launch GameConfigEditor
+- **Documentation Links** — direct links to MS Learn docs for PC packaging, makepkg, and GameConfigEditor
+
+### Setup
+
+1. Copy `addons/godot_gdk_packaging/` into your Godot project's `addons/` folder
+2. In the Godot Editor, go to **Project → Project Settings → Plugins** and enable **GDK Packaging**
+3. The GDK tools are discovered automatically from `C:\Program Files (x86)\Microsoft GDK\bin\`
+   (override with the `GDK_BIN` environment variable if needed)
+
+### Usage
+
+- Use the **GDK Packaging** dropdown menu in the editor toolbar for quick actions
+- The **GDK Packaging** dock panel (bottom-right) provides the full packaging UI:
+  1. Set your content directory (exported Godot project files)
+  2. Configure packaging options (encryption, update compatibility, etc.)
+  3. Click **Create Package** to build an MSIXVC package
 
 ## Testing Achievements
 
