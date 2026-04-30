@@ -8,6 +8,7 @@ const MakePkgExecutorScript = preload("res://addons/godot_gdk_packaging/editor/m
 const GameConfigManagerScript = preload("res://addons/godot_gdk_packaging/editor/game_config_manager.gd")
 
 const SAMPLE_CONFIG_PATH := "res://sample_config.cfg"
+const PLAYFAB_CONFIG_PATH := "res://sample_pf_config.cfg"
 const PACKAGING_SETTINGS_PATH := "res://.gdk_packaging.cfg"
 
 var _toolchain: RefCounted
@@ -1182,23 +1183,23 @@ func _on_achievement_save() -> void:
 
 func _load_playfab_config() -> void:
 	var cfg := ConfigFile.new()
-	if cfg.load(SAMPLE_CONFIG_PATH) == OK:
+	if cfg.load(PLAYFAB_CONFIG_PATH) == OK:
 		var val = cfg.get_value("playfab", "title_id", "")
 		_playfab_title_id_edit.text = str(val)
 		if val != "":
-			_playfab_status_label.text = "Loaded from sample_config.cfg"
+			_playfab_status_label.text = "Loaded from sample_pf_config.cfg"
 		else:
 			_playfab_status_label.text = "No PlayFab Title ID set — enter one and save."
 	else:
-		_playfab_status_label.text = "No sample_config.cfg — enter a value and save."
+		_playfab_status_label.text = "No sample_pf_config.cfg — enter a value and save."
 
 func _on_playfab_save() -> void:
 	var cfg := ConfigFile.new()
-	cfg.load(SAMPLE_CONFIG_PATH)
+	cfg.load(PLAYFAB_CONFIG_PATH)
 	cfg.set_value("playfab", "title_id", _playfab_title_id_edit.text.strip_edges())
-	var err = cfg.save(SAMPLE_CONFIG_PATH)
+	var err = cfg.save(PLAYFAB_CONFIG_PATH)
 	if err == OK:
-		_playfab_status_label.text = "✅ Saved to sample_config.cfg"
+		_playfab_status_label.text = "✅ Saved to sample_pf_config.cfg"
 		_log("PlayFab Title ID saved")
 		var fs = EditorInterface.get_resource_filesystem()
 		if not fs.is_scanning():
