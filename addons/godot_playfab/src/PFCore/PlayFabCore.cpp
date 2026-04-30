@@ -7,6 +7,7 @@
 
 #include <XGameRuntimeInit.h>
 #include <playfab/core/PFCore.h>
+#include <PlayFabServices.h>
 #include <godot_cpp/godot.hpp>
 #include <godot_cpp/core/print_string.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
@@ -22,10 +23,15 @@ PlayFabCore *PlayFabCore::get_singleton() {
 PlayFabCore::PlayFabCore() {
     ERR_FAIL_COND(singleton != nullptr);
     singleton = this;
+    m_playFabAuthentication = new PlayFabAuthentication();
 }
 
 PlayFabCore::~PlayFabCore() {
     shutdown();
+    if (m_playFabAuthentication != nullptr) {
+        delete m_playFabAuthentication;
+        m_playFabAuthentication = nullptr;
+    }
     singleton = nullptr;
 }
 
@@ -33,6 +39,7 @@ void PlayFabCore::_bind_methods() {
     ClassDB::bind_method(D_METHOD("initialize"), &PlayFabCore::initialize);
     ClassDB::bind_method(D_METHOD("shutdown"), &PlayFabCore::shutdown);
     ClassDB::bind_method(D_METHOD("is_initialized"), &PlayFabCore::is_initialized);
+    ClassDB::bind_method(D_METHOD("login_with_custom_id", "custom_id"), &PlayFabCore::login_with_custom_id);
 
     ADD_SIGNAL(MethodInfo("initialized"));
     ADD_SIGNAL(MethodInfo("shutdown_completed"));
@@ -80,6 +87,16 @@ void PlayFabCore::shutdown() {
 
 bool PlayFabCore::is_initialized() const {
     return m_initialized;
+}
+
+int PlayFabCore::login_with_custom_id(const String& p_custom_id)
+{
+    PlayFabServices* playFabService = PlayFabServices::get_singleton();
+    if (playFabService == nullptr || !playFabService->is_initialized()) {
+        UtilityFunctions::printerr("PlayFabCore: PlayFabServiceConfig is not valid, call initialize first");
+        return 0;
+    }
+    return m_playFabAuthentication->login_with_custom_id(p_custom_id, true, playFabService->get_service_config());
 }
 
 } // namespace godot

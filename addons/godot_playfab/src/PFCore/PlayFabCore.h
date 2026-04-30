@@ -6,6 +6,8 @@
 #endif
 #include <windows.h>
 #include "pch.h"
+#include <PlayFabAuthentication.h>
+#include <PlayFabServiceConfig.h>
 #include <godot_cpp/classes/object.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/variant.hpp>
@@ -17,6 +19,7 @@ class PlayFabCore : public Object {
 
     static PlayFabCore *singleton;
 	PFServiceConfigHandle m_serviceHandle{ nullptr };
+    PlayFabAuthentication *m_playFabAuthentication = nullptr;
     bool m_initialized = false;
 protected:
     static void _bind_methods();
@@ -30,6 +33,7 @@ public:
     int initialize();
     void shutdown();
     bool is_initialized() const;
+    int login_with_custom_id(const String& p_custom_id);
 };
 
 } // namespace godot

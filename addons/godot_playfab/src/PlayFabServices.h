@@ -5,6 +5,7 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#include <PlayFabServiceConfig.h>
 #include "pch.h"
 #include <godot_cpp/classes/object.hpp>
 #include <godot_cpp/core/class_db.hpp>
@@ -18,10 +19,9 @@ class PlayFabServices : public Object {
     static PlayFabServices *singleton;
 
     bool m_initialized = false;
-    PFServiceConfigHandle m_service_config_handle = nullptr;
-    EntityHandle m_entityHandle;
     String m_title_id;
     String m_endpoint;
+    PlayFabServiceConfig m_service_config_handle;
 
 protected:
     static void _bind_methods();
@@ -33,12 +33,12 @@ public:
     ~PlayFabServices();
 
     int initialize(const String &p_title_id);
-    int AuthenticationLoginWithCustomIDAsync(const String& p_custom_id);
     void shutdown();
     bool is_initialized() const;
 
     String get_title_id() const;
     String get_endpoint() const;
+    PlayFabServiceConfig PlayFabServices::get_service_config() const;
 };
 
 } // namespace godot

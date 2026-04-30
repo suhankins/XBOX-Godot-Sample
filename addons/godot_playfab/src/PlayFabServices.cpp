@@ -30,7 +30,6 @@ PlayFabServices::~PlayFabServices() {
 
 void PlayFabServices::_bind_methods() {
     ClassDB::bind_method(D_METHOD("initialize", "title_id"), &PlayFabServices::initialize);
-    ClassDB::bind_method(D_METHOD("authentication_login_with_custom_id", "custom_id"), &PlayFabServices::AuthenticationLoginWithCustomIDAsync);
     ClassDB::bind_method(D_METHOD("shutdown"), &PlayFabServices::shutdown);
     ClassDB::bind_method(D_METHOD("is_initialized"), &PlayFabServices::is_initialized);
     ClassDB::bind_method(D_METHOD("get_title_id"), &PlayFabServices::get_title_id);
@@ -60,11 +59,9 @@ int PlayFabServices::initialize(const String &p_title_id) {
         return 0;
     }
 
-    std::string endpoint_std = m_endpoint.utf8().get_data();
-    std::string title_id_std = m_title_id.utf8().get_data();
+    int result = m_service_config_handle.create_handle(m_endpoint, m_title_id);
 
-    hr = PFServiceConfigCreateHandle(endpoint_std.c_str(), title_id_std.c_str(), &m_service_config_handle);
-    if (FAILED(hr)) {
+    if (!result) {
         UtilityFunctions::printerr("PlayFabServices: PFServiceConfigCreateHandle failed with HRESULT 0x", String::num_int64(hr, 16));
         return 0;
     }
@@ -75,39 +72,14 @@ int PlayFabServices::initialize(const String &p_title_id) {
     return 1;
 }
 
-int PlayFabServices::AuthenticationLoginWithCustomIDAsync(const String& p_custom_id) {
-    // Log Player with LoginWithCustomIDRequest
-    PFAuthenticationLoginWithCustomIDRequest request{};
-    request.createAccount = true;
-    request.customId = p_custom_id.utf8().get_data();
-    XAsyncBlock async{};
-    HRESULT hr = PFAuthenticationLoginWithCustomIDAsync(m_service_config_handle, &request, &async);
-    hr = XAsyncGetStatus(&async, true);
-
-    // Prepare login result buffer 
-    std::vector<char> loginResultBuffer;
-    PFAuthenticationLoginResult const* loginResult;
-    size_t bufferSize;
-    hr = PFAuthenticationLoginWithCustomIDGetResultSize(&async, &bufferSize);
-    loginResultBuffer.resize(bufferSize);
-    PFEntityHandle entityHandle = nullptr;
-    hr = PFAuthenticationLoginWithCustomIDGetResult(&async, &entityHandle, loginResultBuffer.size(), loginResultBuffer.data(), &loginResult, nullptr);
-    EntityHandle::set_handle(entityHandle, true);
-    if (FAILED(hr)) {
-        UtilityFunctions::printerr("PlayFabCore: PFAuthenticationLoginWithCustomIDAsync failed with HRESULT 0x", String::num_int64(hr, 16));
-        return 0;
-    }
-    return 1;
-}
 
 void PlayFabServices::shutdown() {
     if (!m_initialized) {
         return;
     }
 
-    if (m_service_config_handle != nullptr) {
-        PFServiceConfigCloseHandle(m_service_config_handle);
-        m_service_config_handle = nullptr;
+    if (m_service_config_handle.is_valid()) {
+        m_service_config_handle.close_handle();
     }
 
     XAsyncBlock async = {};
@@ -131,6 +103,10 @@ String PlayFabServices::get_title_id() const {
 
 String PlayFabServices::get_endpoint() const {
     return m_endpoint;
+}
+
+PlayFabServiceConfig PlayFabServices::get_service_config() const{
+    return m_service_config_handle;
 }
 
 } // namespace godot

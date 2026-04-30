@@ -22,15 +22,6 @@ EntityHandle::~EntityHandle() {
     close_handle();
 }
 
-void EntityHandle::_bind_methods() {
-    ClassDB::bind_method(D_METHOD("get_entity_token"), &EntityHandle::get_entity_token);
-    ClassDB::bind_method(D_METHOD("get_entity_key"), &EntityHandle::get_entity_key);
-    ClassDB::bind_method(D_METHOD("is_title_player"), &EntityHandle::is_title_player);
-    ClassDB::bind_method(D_METHOD("get_api_endpoint"), &EntityHandle::get_api_endpoint);
-    ClassDB::bind_method(D_METHOD("get_title_id"), &EntityHandle::get_title_id);
-    ClassDB::bind_method(D_METHOD("is_valid"), &EntityHandle::is_valid);
-}
-
 int EntityHandle::set_handle(PFEntityHandle p_handle, bool p_owns) {
     m_handle = p_handle;
     m_owns_handle = p_owns;

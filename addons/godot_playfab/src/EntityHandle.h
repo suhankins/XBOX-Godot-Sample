@@ -7,29 +7,24 @@
 #include <windows.h>
 #include "pch.h"
 
-#include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/variant.hpp>
 
 namespace godot {
 
-class EntityHandle : public RefCounted {
-    GDCLASS(EntityHandle, RefCounted);
+class EntityHandle {
 
     static PFEntityHandle m_handle;
     static bool m_owns_handle;
-
-protected:
-    static void _bind_methods();
 
 public:
     EntityHandle();
     ~EntityHandle();
 
-    static int set_handle(PFEntityHandle p_handle, bool p_owns);
-    static PFEntityHandle get_handle();
+    int set_handle(PFEntityHandle p_handle, bool p_owns);
+    PFEntityHandle get_handle();
 
-    static int close_handle();
+    int close_handle();
 
     String get_entity_token();
     Dictionary get_entity_key();
