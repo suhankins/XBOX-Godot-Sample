@@ -501,7 +501,6 @@ func _make_browse_callback(edit: LineEdit, is_dir: bool) -> Callable:
 				edit.text = path
 				_save_packaging_settings()
 				dialog.queue_free())
-				dialog.queue_free())
 
 		dialog.canceled.connect(func(): dialog.queue_free())
 
