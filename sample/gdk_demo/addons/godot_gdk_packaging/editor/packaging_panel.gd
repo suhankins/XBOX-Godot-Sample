@@ -161,7 +161,18 @@ func _build_ui() -> void:
 	tabs.size_flags_horizontal = SIZE_EXPAND_FILL
 	outer.add_child(tabs)
 
-	# ── Tab 1: Sandbox ──
+	# ── Tab 1: Packaging ──
+	var pkg_scroll := ScrollContainer.new()
+	pkg_scroll.name = "Packaging"
+	pkg_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	tabs.add_child(pkg_scroll)
+
+	var pkg := VBoxContainer.new()
+	pkg.size_flags_horizontal = SIZE_EXPAND_FILL
+	pkg_scroll.add_child(pkg)
+	_build_packaging_ui(pkg)
+
+	# ── Tab 2: Sandbox ──
 	var sandbox_scroll := ScrollContainer.new()
 	sandbox_scroll.name = "Sandbox"
 	sandbox_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -172,7 +183,7 @@ func _build_ui() -> void:
 	sandbox_scroll.add_child(sandbox)
 	_build_sandbox_ui(sandbox)
 
-	# ── Tab 2: Achievements ──
+	# ── Tab 3: Achievements ──
 	var ach_scroll := ScrollContainer.new()
 	ach_scroll.name = "Achievements"
 	ach_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -182,17 +193,6 @@ func _build_ui() -> void:
 	ach.size_flags_horizontal = SIZE_EXPAND_FILL
 	ach_scroll.add_child(ach)
 	_build_achievements_ui(ach)
-
-	# ── Tab 3: Packaging ──
-	var pkg_scroll := ScrollContainer.new()
-	pkg_scroll.name = "Packaging"
-	pkg_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	tabs.add_child(pkg_scroll)
-
-	var pkg := VBoxContainer.new()
-	pkg.size_flags_horizontal = SIZE_EXPAND_FILL
-	pkg_scroll.add_child(pkg)
-	_build_packaging_ui(pkg)
 
 	_set_actions_enabled(_toolchain.is_gdk_available())
 	_load_achievement_config()
