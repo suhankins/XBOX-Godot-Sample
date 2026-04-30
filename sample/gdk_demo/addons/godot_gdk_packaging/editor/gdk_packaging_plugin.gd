@@ -138,11 +138,17 @@ func _on_menu_item_pressed(id: int) -> void:
 				push_warning("[GDK Packaging] MicrosoftGame.config not found — create one first.")
 
 		MenuID.CREATE_CONFIG:
-			var err = _config_mgr.create_template()
-			if err == OK:
-				print("[GDK Packaging] Created template MicrosoftGame.config")
-			elif err == ERR_ALREADY_EXISTS:
-				push_warning("[GDK Packaging] MicrosoftGame.config already exists.")
+			if _config_mgr.config_exists():
+				var dialog := AcceptDialog.new()
+				dialog.title = "MicrosoftGame.config"
+				dialog.dialog_text = "MicrosoftGame.config already exists.\nUse \"Edit MicrosoftGame.config\" from the GDK menu\nor the Config tab to modify it."
+				dialog.confirmed.connect(func(): dialog.queue_free())
+				EditorInterface.get_base_control().add_child(dialog)
+				dialog.popup_centered(Vector2i(450, 150))
+			else:
+				var err = _config_mgr.create_template()
+				if err == OK:
+					print("[GDK Packaging] Created template MicrosoftGame.config")
 
 		MenuID.DOC_PACKAGING:
 			OS.shell_open(DOC_PC_PACKAGING)
