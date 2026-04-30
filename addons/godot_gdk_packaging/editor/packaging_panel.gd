@@ -58,6 +58,7 @@ var _achievement_status_label: Label
 # PlayFab
 var _playfab_title_id_edit: LineEdit
 var _playfab_status_label: Label
+var _playfab_version_label: Label
 
 # Output
 var _status_label: Label
@@ -438,6 +439,16 @@ func _build_playfab_ui(root: VBoxContainer) -> void:
 	_playfab_status_label = Label.new()
 	_playfab_status_label.text = ""
 	root.add_child(_playfab_status_label)
+
+	root.add_child(HSeparator.new())
+
+	# PlayFab SDK version
+	_playfab_version_label = Label.new()
+	_playfab_version_label.text = "PlayFab SDK: detecting..."
+	_playfab_version_label.add_theme_font_size_override("font_size", 12)
+	_playfab_version_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	root.add_child(_playfab_version_label)
+	_detect_playfab_version()
 
 
 func _build_packaging_ui(root: VBoxContainer) -> void:
@@ -1207,3 +1218,31 @@ func _on_playfab_save() -> void:
 	else:
 		_playfab_status_label.text = "Failed to save: " + error_string(err)
 		push_error("[GDK] Failed to save PlayFab config: " + error_string(err))
+
+func _detect_playfab_version() -> void:
+	# Look for PlayFabCore.dll in the project's addon bin directory
+	var search_paths := [
+		"res://addons/godot_playfab/bin/PlayFabCore.dll",
+	]
+	var dll_path := ""
+	for p in search_paths:
+		var global_p = ProjectSettings.globalize_path(p)
+		if FileAccess.file_exists(global_p):
+			dll_path = global_p
+			break
+
+	if dll_path == "":
+		_playfab_version_label.text = "PlayFab SDK: not found"
+		return
+
+	# Use PowerShell to read the DLL product version
+	var output: Array = []
+	var ps_cmd = "(Get-Item '%s').VersionInfo.ProductVersion" % dll_path.replace("'", "''")
+	var exit_code = OS.execute("powershell", PackedStringArray(["-NoProfile", "-Command", ps_cmd]), output, true, false)
+	if exit_code == 0 and output.size() > 0:
+		var version = str(output[0]).strip_edges()
+		if version != "":
+			_playfab_version_label.text = "PlayFab SDK: %s" % version
+			return
+
+	_playfab_version_label.text = "PlayFab SDK: installed (version unknown)"
