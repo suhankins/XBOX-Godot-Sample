@@ -155,44 +155,56 @@ func _build_ui() -> void:
 	_build_config_ui(outer)
 	outer.add_child(HSeparator.new())
 
-	# ── Tab Container ──
-	var tabs := TabContainer.new()
-	tabs.size_flags_vertical = SIZE_EXPAND_FILL
-	tabs.size_flags_horizontal = SIZE_EXPAND_FILL
-	outer.add_child(tabs)
+	# ── Tab Bar (visible, styled buttons) ──
+	var tab_bar := TabBar.new()
+	tab_bar.add_tab("📦 Packaging")
+	tab_bar.add_tab("🔒 Sandbox")
+	tab_bar.add_tab("🏆 Achievements")
+	tab_bar.clip_tabs = false
+	tab_bar.size_flags_horizontal = SIZE_EXPAND_FILL
+	tab_bar.add_theme_font_size_override("font_size", 14)
+	outer.add_child(tab_bar)
 
-	# ── Tab 1: Packaging ──
+	# ── Content pages (one per tab) ──
+	var _tab_pages: Array[ScrollContainer] = []
+
 	var pkg_scroll := ScrollContainer.new()
-	pkg_scroll.name = "Packaging"
 	pkg_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	tabs.add_child(pkg_scroll)
-
+	pkg_scroll.size_flags_vertical = SIZE_EXPAND_FILL
+	outer.add_child(pkg_scroll)
 	var pkg := VBoxContainer.new()
 	pkg.size_flags_horizontal = SIZE_EXPAND_FILL
 	pkg_scroll.add_child(pkg)
 	_build_packaging_ui(pkg)
+	_tab_pages.append(pkg_scroll)
 
-	# ── Tab 2: Sandbox ──
 	var sandbox_scroll := ScrollContainer.new()
-	sandbox_scroll.name = "Sandbox"
 	sandbox_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	tabs.add_child(sandbox_scroll)
-
+	sandbox_scroll.size_flags_vertical = SIZE_EXPAND_FILL
+	sandbox_scroll.visible = false
+	outer.add_child(sandbox_scroll)
 	var sandbox := VBoxContainer.new()
 	sandbox.size_flags_horizontal = SIZE_EXPAND_FILL
 	sandbox_scroll.add_child(sandbox)
 	_build_sandbox_ui(sandbox)
+	_tab_pages.append(sandbox_scroll)
 
-	# ── Tab 3: Achievements ──
 	var ach_scroll := ScrollContainer.new()
-	ach_scroll.name = "Achievements"
 	ach_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	tabs.add_child(ach_scroll)
-
+	ach_scroll.size_flags_vertical = SIZE_EXPAND_FILL
+	ach_scroll.visible = false
+	outer.add_child(ach_scroll)
 	var ach := VBoxContainer.new()
 	ach.size_flags_horizontal = SIZE_EXPAND_FILL
 	ach_scroll.add_child(ach)
 	_build_achievements_ui(ach)
+	_tab_pages.append(ach_scroll)
+
+	# Wire tab switching
+	tab_bar.tab_changed.connect(func(idx: int):
+		for i in _tab_pages.size():
+			_tab_pages[i].visible = (i == idx)
+	)
 
 	_set_actions_enabled(_toolchain.is_gdk_available())
 	_load_achievement_config()
