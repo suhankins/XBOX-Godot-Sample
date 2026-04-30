@@ -738,6 +738,44 @@ func _refresh_config_preview(info: Dictionary) -> void:
 		row.add_child(val_label)
 
 
+# ── Packaging Helpers ───────────────────────────────────────────────────────
+
+## Ensures MicrosoftGame.config and storelogos/ exist in the content directory.
+## makepkg requires these alongside the game files.
+func _ensure_config_in_content_dir(content_dir: String) -> bool:
+	var project_dir = ProjectSettings.globalize_path("res://")
+	var config_src = _config_mgr.get_config_path()
+	var config_dest = content_dir.path_join("MicrosoftGame.config")
+
+	if not FileAccess.file_exists(config_src):
+		_log("❌ MicrosoftGame.config not found — create one first.")
+		return false
+
+	# Copy MicrosoftGame.config into content dir if not already there
+	if config_src != config_dest:
+		var dir = DirAccess.open(project_dir)
+		if dir:
+			dir.copy(config_src, config_dest)
+			_log("Copied MicrosoftGame.config to content directory")
+
+	# Copy storelogos/ into content dir
+	var logos_src = project_dir.path_join("storelogos")
+	var logos_dest = content_dir.path_join("storelogos")
+	if DirAccess.dir_exists_absolute(logos_src):
+		DirAccess.make_dir_recursive_absolute(logos_dest)
+		var logos_dir = DirAccess.open(logos_src)
+		if logos_dir:
+			logos_dir.list_dir_begin()
+			var filename = logos_dir.get_next()
+			while filename != "":
+				if not logos_dir.current_is_dir() and filename.ends_with(".png"):
+					logos_dir.copy(logos_src.path_join(filename), logos_dest.path_join(filename))
+				filename = logos_dir.get_next()
+			logos_dir.list_dir_end()
+
+	return true
+
+
 # ── Signal Handlers ─────────────────────────────────────────────────────────
 
 func _on_encrypt_changed(index: int) -> void:
@@ -808,6 +846,8 @@ func _on_validate() -> void:
 		return
 	if output == "":
 		output = source
+	if not _ensure_config_in_content_dir(source):
+		return
 	_log("Validating package layout...")
 	var result = _makepkg.validate(map_file, source, output)
 	_log_result(result)
@@ -820,6 +860,8 @@ func _on_pack() -> void:
 		return
 	if output == "":
 		_log("❌ Output directory is required.")
+		return
+	if not _ensure_config_in_content_dir(source):
 		return
 
 	# Auto-generate mapping file if checkbox is on
