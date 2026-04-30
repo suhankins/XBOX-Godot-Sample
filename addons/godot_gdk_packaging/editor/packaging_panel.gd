@@ -54,6 +54,10 @@ var _achievement_id_edit: LineEdit
 var _achievement_save_btn: Button
 var _achievement_status_label: Label
 
+# PlayFab
+var _playfab_title_id_edit: LineEdit
+var _playfab_status_label: Label
+
 # Output
 var _status_label: Label
 
@@ -166,6 +170,7 @@ func _build_ui() -> void:
 	tab_bar.add_tab("📦 Packaging")
 	tab_bar.add_tab("🔒 Sandbox")
 	tab_bar.add_tab("🏆 Achievements")
+	tab_bar.add_tab("☁️ PlayFab")
 	tab_bar.clip_tabs = false
 	tab_bar.size_flags_horizontal = SIZE_EXPAND_FILL
 	tab_bar.add_theme_font_size_override("font_size", 18)
@@ -217,6 +222,17 @@ func _build_ui() -> void:
 	_build_achievements_ui(ach)
 	_tab_pages.append(ach_scroll)
 
+	var playfab_scroll := ScrollContainer.new()
+	playfab_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	playfab_scroll.size_flags_vertical = SIZE_EXPAND_FILL
+	playfab_scroll.visible = false
+	outer.add_child(playfab_scroll)
+	var playfab := VBoxContainer.new()
+	playfab.size_flags_horizontal = SIZE_EXPAND_FILL
+	playfab_scroll.add_child(playfab)
+	_build_playfab_ui(playfab)
+	_tab_pages.append(playfab_scroll)
+
 	# Wire tab switching
 	tab_bar.tab_changed.connect(func(idx: int):
 		for i in _tab_pages.size():
@@ -225,6 +241,7 @@ func _build_ui() -> void:
 
 	_set_actions_enabled(_toolchain.is_gdk_available())
 	_load_achievement_config()
+	_load_playfab_config()
 	_connect_autosave()
 
 
@@ -378,6 +395,66 @@ func _build_achievements_ui(root: VBoxContainer) -> void:
 	_achievement_status_label = Label.new()
 	_achievement_status_label.text = ""
 	root.add_child(_achievement_status_label)
+
+
+func _build_playfab_ui(root: VBoxContainer) -> void:
+	var desc := Label.new()
+	desc.text = "Configure your PlayFab Title ID for Xbox Live integration.\nThe Title ID is used at runtime to connect to PlayFab services."
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.add_theme_font_size_override("font_size", 12)
+	desc.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	root.add_child(desc)
+
+	root.add_child(HSeparator.new())
+
+	# PlayFab Title ID
+	var title_row := HBoxContainer.new()
+	root.add_child(title_row)
+	var title_label := Label.new()
+	title_label.text = "PlayFab Title ID"
+	title_label.custom_minimum_size.x = 130
+	title_label.tooltip_text = "Your PlayFab Title ID from Game Manager → Settings → API Keys. Used at runtime to initialize the PlayFab SDK."
+	title_row.add_child(title_label)
+	_playfab_title_id_edit = LineEdit.new()
+	_playfab_title_id_edit.placeholder_text = "e.g. A1B2C"
+	_playfab_title_id_edit.size_flags_horizontal = SIZE_EXPAND_FILL
+	title_row.add_child(_playfab_title_id_edit)
+
+	var btn_row := HBoxContainer.new()
+	root.add_child(btn_row)
+
+	var save_btn := Button.new()
+	save_btn.text = "Save"
+	save_btn.pressed.connect(_on_playfab_save)
+	btn_row.add_child(save_btn)
+
+	var manager_btn := Button.new()
+	manager_btn.text = "Open Game Manager"
+	manager_btn.tooltip_text = "Open the PlayFab Game Manager in your browser"
+	manager_btn.pressed.connect(func(): OS.shell_open("https://developer.playfab.com/en-us/r/sign-in"))
+	btn_row.add_child(manager_btn)
+
+	_playfab_status_label = Label.new()
+	_playfab_status_label.text = ""
+	root.add_child(_playfab_status_label)
+
+	root.add_child(HSeparator.new())
+
+	# Documentation links
+	_add_section_header(root, "Documentation")
+
+	var doc_btn_row := HBoxContainer.new()
+	root.add_child(doc_btn_row)
+
+	var doc_ids_btn := Button.new()
+	doc_ids_btn.text = "📖 Get PlayFab IDs from Xbox Live"
+	doc_ids_btn.pressed.connect(func(): OS.shell_open("https://learn.microsoft.com/en-us/rest/api/playfab/client/account-management/get-playfab-ids-from-xbox-live-ids"))
+	doc_btn_row.add_child(doc_ids_btn)
+
+	var doc_gdk_btn := Button.new()
+	doc_gdk_btn.text = "📖 PlayFab + GDK Quickstart"
+	doc_gdk_btn.pressed.connect(func(): OS.shell_open("https://learn.microsoft.com/en-us/gaming/playfab/sdks/playfab-sdk-for-gdk/quickstart-gdk"))
+	doc_btn_row.add_child(doc_gdk_btn)
 
 
 func _build_packaging_ui(root: VBoxContainer) -> void:
@@ -1117,3 +1194,33 @@ func _on_achievement_save() -> void:
 	else:
 		_achievement_status_label.text = "Failed to save: " + error_string(err)
 		push_error("[GDK] Failed to save achievement config: " + error_string(err))
+
+
+# ── PlayFab ─────────────────────────────────────────────────────────────────
+
+func _load_playfab_config() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load(SAMPLE_CONFIG_PATH) == OK:
+		var val = cfg.get_value("playfab", "title_id", "")
+		_playfab_title_id_edit.text = str(val)
+		if val != "":
+			_playfab_status_label.text = "Loaded from sample_config.cfg"
+		else:
+			_playfab_status_label.text = "No PlayFab Title ID set — enter one and save."
+	else:
+		_playfab_status_label.text = "No sample_config.cfg — enter a value and save."
+
+func _on_playfab_save() -> void:
+	var cfg := ConfigFile.new()
+	cfg.load(SAMPLE_CONFIG_PATH)
+	cfg.set_value("playfab", "title_id", _playfab_title_id_edit.text.strip_edges())
+	var err = cfg.save(SAMPLE_CONFIG_PATH)
+	if err == OK:
+		_playfab_status_label.text = "✅ Saved to sample_config.cfg"
+		_log("PlayFab Title ID saved")
+		var fs = EditorInterface.get_resource_filesystem()
+		if not fs.is_scanning():
+			fs.scan()
+	else:
+		_playfab_status_label.text = "Failed to save: " + error_string(err)
+		push_error("[GDK] Failed to save PlayFab config: " + error_string(err))

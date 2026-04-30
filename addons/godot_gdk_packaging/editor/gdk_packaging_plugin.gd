@@ -13,6 +13,7 @@ const DOC_PC_PACKAGING := "https://learn.microsoft.com/en-us/gaming/gdk/_content
 const DOC_MAKEPKG := "https://learn.microsoft.com/en-us/gaming/gdk/_content/gc/packaging/deployment/makepkg-package-creation"
 const DOC_GAME_CONFIG_EDITOR := "https://learn.microsoft.com/en-us/gaming/gdk/_content/gc/system/overviews/game-config-editor"
 const DOC_ACHIEVEMENTS := "https://learn.microsoft.com/en-us/gaming/gdk/docs/gdk-dev/pc-dev/tutorials/pc-e2e-guide/e2e-services/e2e-achievements"
+const DOC_PLAYFAB_GAME_MANAGER := "https://developer.playfab.com/en-us/r/sign-in"
 
 var _menu_bar: MenuBar
 var _gdk_popup: PopupMenu
@@ -35,6 +36,7 @@ enum MenuID {
 	DOC_MAKEPKG,
 	DOC_CONFIG_EDITOR,
 	DOC_ACHIEVEMENTS,
+	DOC_PLAYFAB,
 }
 
 
@@ -62,6 +64,7 @@ func _enter_tree() -> void:
 		_gdk_popup.add_item("📖 makepkg Reference", MenuID.DOC_MAKEPKG)
 		_gdk_popup.add_item("📖 GameConfigEditor Reference", MenuID.DOC_CONFIG_EDITOR)
 		_gdk_popup.add_item("📖 Achievements Guide", MenuID.DOC_ACHIEVEMENTS)
+		_gdk_popup.add_item("📖 PlayFab Game Manager", MenuID.DOC_PLAYFAB)
 		_gdk_popup.id_pressed.connect(_on_menu_item_pressed)
 
 		_menu_bar.add_child(_gdk_popup)
@@ -161,6 +164,9 @@ func _on_menu_item_pressed(id: int) -> void:
 
 		MenuID.DOC_ACHIEVEMENTS:
 			OS.shell_open(DOC_ACHIEVEMENTS)
+
+		MenuID.DOC_PLAYFAB:
+			OS.shell_open(DOC_PLAYFAB_GAME_MANAGER)
 
 
 func _focus_packaging_panel() -> void:
