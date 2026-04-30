@@ -21,7 +21,7 @@ static GDK *gdk_singleton = nullptr;
 
 void initialize_gdk_extension(ModuleInitializationLevel p_level) {
     if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
-        ClassDB::register_class<GDK>();
+        ClassDB::register_abstract_class<GDK>();
         ClassDB::register_class<GDKResult>();
         ClassDB::register_class<GDKAsyncOp>();
         ClassDB::register_class<GDKDispatchOp>();
