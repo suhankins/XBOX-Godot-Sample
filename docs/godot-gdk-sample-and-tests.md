@@ -31,12 +31,16 @@ The `gdk_demo` bootstrap currently:
 2. connects to root and users signals
 3. calls `GDK.initialize()`
 4. starts `GDK.users.add_default_user_async()` when initialization succeeds
-5. calls `GDK.dispatch()` every frame
+5. relies on native auto-dispatch with `gdk/runtime/embed_dispatch=true`
 6. shuts the runtime down when leaving the tree
 
-That means the GDK demo sample treats `GDK.dispatch()` as a per-frame pump managed by an autoload.
+That means the GDK demo sample expects native auto-dispatch to stay enabled and
+does not provide a manual pump path in the sample code.
 
-`sample\shamwow\gdk_bootstrap.gd` also autoloads in the ShamWow sample, but that bootstrap only keeps the extension loaded and pumps dispatch when the runtime is already initialized. Runtime initialization itself is left to explicit scenarios in the shell.
+`sample\shamwow\gdk_bootstrap.gd` also autoloads in the ShamWow sample, but
+that bootstrap now only keeps the extension loaded while the shell drives
+runtime scenarios. The sample projects set `gdk/runtime/embed_dispatch=true`
+explicitly in `project.godot` and do not expose manual dispatch UI.
 
 ## Demo scenes
 
@@ -91,6 +95,7 @@ It checks:
 - presence API shape plus caller-context and input-validation behavior
 - social API shape plus graph/group behavior against a signed-in user when services are available
 - signal connectivity
+- embed-dispatch startup behavior and sample bootstrap compatibility
 - addon structure
 
 The suite is now split into focused modules with a shared test context so it can exercise real runtime behavior, async completion, and signed-in user flows when the environment supports them, while still checking deterministic validation/error paths on machines that cannot complete Xbox sign-in.

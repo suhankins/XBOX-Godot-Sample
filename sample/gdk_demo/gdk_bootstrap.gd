@@ -1,5 +1,6 @@
 extends Node
-## Autoload script that initializes the shared GDK runtime and pumps async dispatch.
+## Autoload script that initializes the shared GDK runtime.
+## Samples require native auto-dispatch and do not provide a manual pump path.
 
 const GDK_EXTENSION_PATH := "res://addons/godot_gdk/godot_gdk.gdextension"
 const GD_SCRIPT_CHECK_FLAG := "--gd-script-check"
@@ -87,11 +88,6 @@ func _on_primary_user_changed(user) -> void:
 		print("[GDK] Primary user: %s" % user.gamertag)
 	else:
 		print("[GDK] No primary user")
-
-func _process(_delta: float) -> void:
-	var gdk = get_gdk()
-	if _bootstrap_active and gdk != null and gdk.is_initialized():
-		gdk.dispatch()
 
 func _exit_tree() -> void:
 	var gdk = get_gdk()

@@ -21,7 +21,7 @@ accessed as namespaces under this root.
 | `shutdown()` | `void` | Clean up the runtime |
 | `is_available()` | `bool` | Whether the GDK runtime is available on this platform |
 | `is_initialized()` | `bool` | Whether the runtime has been initialized |
-| `dispatch()` | `int` | Pump async completions and manager state (call every frame) |
+| `dispatch()` | `int` | Pump async completions and manager state manually when `gdk/runtime/embed_dispatch` is disabled or when deterministic control is needed |
 | `get_last_error()` | `GDKResult` | Last error result |
 | `get_users()` | `GDKUsers` | Access the users service |
 | `get_achievements()` | `GDKAchievements` | Access the achievements service |
@@ -44,11 +44,18 @@ accessed as namespaces under this root.
 func _ready():
     GDK.initialize()
 
-func _process(_delta):
-    GDK.dispatch()
-
 func _exit_tree():
     GDK.shutdown()
+```
+
+By default the addon pumps completions automatically each process frame through
+`gdk/runtime/embed_dispatch`.
+
+If you disable that setting, call `dispatch()` manually:
+
+```gdscript
+func _process(_delta):
+    GDK.dispatch()
 ```
 
 ## Users service: `GDK.users`

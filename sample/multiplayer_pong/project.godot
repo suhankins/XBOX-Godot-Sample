@@ -38,6 +38,10 @@ window/stretch/scale_mode="integer"
 
 enabled=PackedStringArray("res://addons/godot_gdk/plugin.cfg")
 
+[gdk]
+
+runtime/embed_dispatch=true
+
 [input]
 
 move_up={

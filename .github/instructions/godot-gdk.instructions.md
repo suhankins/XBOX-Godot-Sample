@@ -17,7 +17,8 @@ applyTo: "addons/godot_gdk/**, sample/gdk_demo/addons/godot_gdk/**, sample/gdk_d
 - `GDKRuntime` owns one shared `XTaskQueue` with:
   - `ThreadPool` work dispatch
   - `Manual` completion dispatch
-- Games and the sample are expected to call `GDK.dispatch()` regularly. This pumps both `XAsync` completions and manager-driven state.
+- `gdk/runtime/embed_dispatch` defaults to `true`. On Godot 4.5+ builds, the addon auto-pumps `GDK.dispatch()` from Godot's main thread each process frame via the engine frame callback path.
+- On Godot 4.3/4.4 builds, auto-pumping is not available through `embed_dispatch`; games, samples, and tests must keep calling `GDK.dispatch()` manually each frame. Manual pumping is also the required path whenever `embed_dispatch` is disabled or deterministic control is needed. This pump still covers both `XAsync` completions and manager-driven state.
 - Use `GDKAsyncOp` only for true `XAsyncBlock`-backed requests.
 - Use `GDKDispatchOp` for manager/event-driven one-shot waits such as Achievements Manager and future Social Manager flows.
 - Immediate failures should still return an already-completed op of the appropriate type.

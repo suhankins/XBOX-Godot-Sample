@@ -73,7 +73,7 @@ The queue is configured as:
 - work port: `ThreadPool`
 - completion port: `Manual`
 
-That means native work may happen off-thread, but Godot-visible completion only becomes visible when `GDK.dispatch()` drains the completion queue.
+That means native work may happen off-thread, but Godot-visible completion only becomes visible when `GDK.dispatch()` drains the completion queue. By default the addon now calls `GDK.dispatch()` from a native process-frame callback while `gdk/runtime/embed_dispatch` is enabled, and games can fall back to manual dispatch when they disable that setting.
 
 ## Xbox services scaffold: `GDKXboxServices`
 

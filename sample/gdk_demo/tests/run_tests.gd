@@ -15,6 +15,9 @@ func _initialize() -> void:
 	print("║   GodotGDK Runtime/Services Tests    ║")
 	print("╚══════════════════════════════════════╝")
 
+	call_deferred("_run_suites")
+
+func _run_suites() -> void:
 	var context = TestContext.new()
 	var suites = [
 		CoreSuite.new(),
@@ -26,7 +29,9 @@ func _initialize() -> void:
 	]
 
 	for suite in suites:
-		suite.run(context)
+		var run_result = suite.run(context)
+		if run_result is GDScriptFunctionState:
+			await run_result
 
 	var total = context.pass_count + context.fail_count + context.skip_count
 	print("\n══════════════════════════════════════")

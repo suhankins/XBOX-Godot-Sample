@@ -2,10 +2,13 @@ extends RefCounted
 
 const DEFAULT_ASYNC_TIMEOUT_MSEC = 5000
 const ASYNC_POLL_INTERVAL_MSEC = 10
+const EMBED_DISPATCH_SETTING = "gdk/runtime/embed_dispatch"
+const GDK_EXTENSION_PATH = "res://addons/godot_gdk/godot_gdk.gdextension"
 
 var pass_count := 0
 var fail_count := 0
 var skip_count := 0
+var _gdk_extension = null
 
 func log_section(name: String) -> void:
 	print("\n── %s ──" % name)
@@ -80,7 +83,16 @@ func disconnect_signal_handlers(obj: Object, signal_names: Array) -> void:
 			obj.disconnect(signal_name, conn["callable"])
 
 func get_gdk():
-	return Engine.get_singleton("GDK")
+	if Engine.has_singleton("GDK"):
+		return Engine.get_singleton("GDK")
+
+	if _gdk_extension == null and FileAccess.file_exists(GDK_EXTENSION_PATH):
+		_gdk_extension = load(GDK_EXTENSION_PATH)
+
+	if Engine.has_singleton("GDK"):
+		return Engine.get_singleton("GDK")
+
+	return null
 
 func reset_runtime() -> void:
 	var gdk = get_gdk()
@@ -94,6 +106,12 @@ func initialize_runtime():
 
 	reset_runtime()
 	return gdk.initialize()
+
+func get_embed_dispatch_enabled() -> bool:
+	return bool(ProjectSettings.get_setting(EMBED_DISPATCH_SETTING, true))
+
+func set_embed_dispatch_enabled(enabled: bool) -> void:
+	ProjectSettings.set_setting(EMBED_DISPATCH_SETTING, enabled)
 
 func wait_for_op(op, timeout_msec: int = DEFAULT_ASYNC_TIMEOUT_MSEC):
 	if op == null:
@@ -110,6 +128,32 @@ func wait_for_op(op, timeout_msec: int = DEFAULT_ASYNC_TIMEOUT_MSEC):
 
 	if gdk != null:
 		gdk.dispatch()
+
+	return op.get_result()
+
+func advance_process_frames(frame_count: int) -> bool:
+	var main_loop = Engine.get_main_loop()
+	if main_loop == null or not main_loop.has_signal("process_frame"):
+		return false
+
+	for _frame_index in range(frame_count):
+		await main_loop.process_frame
+
+	return true
+
+func wait_for_op_without_manual_dispatch(op, timeout_msec: int = DEFAULT_ASYNC_TIMEOUT_MSEC):
+	if op == null:
+		return null
+
+	var main_loop = Engine.get_main_loop()
+	if main_loop == null or not main_loop.has_signal("process_frame"):
+		return null
+
+	var started_msec = Time.get_ticks_msec()
+	while not op.is_done():
+		if Time.get_ticks_msec() - started_msec >= timeout_msec:
+			return null
+		await main_loop.process_frame
 
 	return op.get_result()
 

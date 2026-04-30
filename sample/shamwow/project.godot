@@ -22,6 +22,10 @@ GDKBootstrap="*res://gdk_bootstrap.gd"
 
 enabled=PackedStringArray("res://addons/godot_gdk/plugin.cfg")
 
+[gdk]
+
+runtime/embed_dispatch=true
+
 [display]
 
 window/size/viewport_width=1600

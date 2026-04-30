@@ -85,7 +85,6 @@ public:
     void set_owner(GDK *p_owner);
 
     Ref<GDKResult> on_runtime_initialized();
-    int dispatch();
     void shutdown();
     void on_user_removed(const Ref<GDKUser> &p_user);
 
