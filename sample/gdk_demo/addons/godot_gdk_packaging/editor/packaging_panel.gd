@@ -8,6 +8,7 @@ const MakePkgExecutorScript = preload("res://addons/godot_gdk_packaging/editor/m
 const GameConfigManagerScript = preload("res://addons/godot_gdk_packaging/editor/game_config_manager.gd")
 
 const SAMPLE_CONFIG_PATH := "res://sample_config.cfg"
+const PACKAGING_SETTINGS_PATH := "res://.gdk_packaging.cfg"
 
 var _toolchain: RefCounted
 var _makepkg: RefCounted
@@ -72,6 +73,7 @@ func _ready() -> void:
 	_makepkg = MakePkgExecutorScript.new(_toolchain)
 	_config_mgr = GameConfigManagerScript.new(_toolchain)
 	_build_ui()
+	_load_packaging_settings()
 	_refresh_sandbox_status()
 	_refresh_config_status()
 	set_process(true)
@@ -222,6 +224,7 @@ func _build_ui() -> void:
 
 	_set_actions_enabled(_toolchain.is_gdk_available())
 	_load_achievement_config()
+	_connect_autosave()
 
 
 func _build_sandbox_ui(root: VBoxContainer) -> void:
@@ -736,6 +739,54 @@ func _refresh_config_preview(info: Dictionary) -> void:
 		val_label.tooltip_text = tooltip
 		val_label.mouse_filter = Control.MOUSE_FILTER_PASS
 		row.add_child(val_label)
+
+
+# ── Settings Persistence ────────────────────────────────────────────────────
+
+func _load_packaging_settings() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load(PACKAGING_SETTINGS_PATH) != OK:
+		return
+	_source_dir_edit.text = cfg.get_value("packaging", "source_dir", "")
+	_map_file_edit.text = cfg.get_value("packaging", "map_file", "")
+	_auto_genmap_check.button_pressed = cfg.get_value("packaging", "auto_genmap", true)
+	_output_dir_edit.text = cfg.get_value("packaging", "output_dir", "")
+	_content_id_edit.text = cfg.get_value("packaging", "content_id", "")
+	_product_id_edit.text = cfg.get_value("packaging", "product_id", "")
+	_encrypt_option.selected = cfg.get_value("packaging", "encrypt_option", 0)
+	_encrypt_key_edit.text = cfg.get_value("packaging", "encrypt_key", "")
+	_updcompat_option.selected = cfg.get_value("packaging", "updcompat_option", 0)
+	_sandbox_id_edit.text = cfg.get_value("sandbox", "sandbox_id", "")
+	# Trigger visibility update for encrypt key field
+	_on_encrypt_changed(_encrypt_option.selected)
+	_on_auto_genmap_toggled(_auto_genmap_check.button_pressed)
+
+func _save_packaging_settings() -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("packaging", "source_dir", _source_dir_edit.text)
+	cfg.set_value("packaging", "map_file", _map_file_edit.text)
+	cfg.set_value("packaging", "auto_genmap", _auto_genmap_check.button_pressed)
+	cfg.set_value("packaging", "output_dir", _output_dir_edit.text)
+	cfg.set_value("packaging", "content_id", _content_id_edit.text)
+	cfg.set_value("packaging", "product_id", _product_id_edit.text)
+	cfg.set_value("packaging", "encrypt_option", _encrypt_option.selected)
+	cfg.set_value("packaging", "encrypt_key", _encrypt_key_edit.text)
+	cfg.set_value("packaging", "updcompat_option", _updcompat_option.selected)
+	cfg.set_value("sandbox", "sandbox_id", _sandbox_id_edit.text)
+	cfg.save(PACKAGING_SETTINGS_PATH)
+
+func _connect_autosave() -> void:
+	var save_fn = func(_arg = null): _save_packaging_settings()
+	_source_dir_edit.text_changed.connect(save_fn)
+	_map_file_edit.text_changed.connect(save_fn)
+	_output_dir_edit.text_changed.connect(save_fn)
+	_content_id_edit.text_changed.connect(save_fn)
+	_product_id_edit.text_changed.connect(save_fn)
+	_encrypt_key_edit.text_changed.connect(save_fn)
+	_sandbox_id_edit.text_changed.connect(save_fn)
+	_auto_genmap_check.toggled.connect(save_fn)
+	_encrypt_option.item_selected.connect(save_fn)
+	_updcompat_option.item_selected.connect(save_fn)
 
 
 # ── Packaging Helpers ───────────────────────────────────────────────────────
