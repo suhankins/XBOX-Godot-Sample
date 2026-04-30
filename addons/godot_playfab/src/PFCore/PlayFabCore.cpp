@@ -40,6 +40,7 @@ void PlayFabCore::_bind_methods() {
     ClassDB::bind_method(D_METHOD("shutdown"), &PlayFabCore::shutdown);
     ClassDB::bind_method(D_METHOD("is_initialized"), &PlayFabCore::is_initialized);
     ClassDB::bind_method(D_METHOD("login_with_custom_id", "custom_id"), &PlayFabCore::login_with_custom_id);
+    ClassDB::bind_method(D_METHOD("login_with_xuser", "custom_id"), &PlayFabCore::login_with_xuser);
 
     ADD_SIGNAL(MethodInfo("initialized"));
     ADD_SIGNAL(MethodInfo("shutdown_completed"));
@@ -97,6 +98,16 @@ int PlayFabCore::login_with_custom_id(const String& p_custom_id)
         return 0;
     }
     return m_playFabAuthentication->login_with_custom_id(p_custom_id, true, playFabService->get_service_config());
+}
+
+int PlayFabCore::login_with_xuser(const int p_custom_id)
+{
+    PlayFabServices* playFabService = PlayFabServices::get_singleton();
+    if (playFabService == nullptr || !playFabService->is_initialized()) {
+        UtilityFunctions::printerr("PlayFabCore: PlayFabServiceConfig is not valid, call initialize first");
+        return 0;
+    }
+    return m_playFabAuthentication->login_with_xuser(p_custom_id, true, playFabService->get_service_config());
 }
 
 } // namespace godot

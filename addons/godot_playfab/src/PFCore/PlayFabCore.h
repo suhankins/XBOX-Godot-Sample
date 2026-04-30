@@ -34,6 +34,7 @@ public:
     void shutdown();
     bool is_initialized() const;
     int login_with_custom_id(const String& p_custom_id);
+    int login_with_xuser(const int p_custom_id);
 };
 
 } // namespace godot
