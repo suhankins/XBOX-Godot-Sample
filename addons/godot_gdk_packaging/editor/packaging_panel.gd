@@ -740,7 +740,7 @@ func _refresh_config_preview(info: Dictionary) -> void:
 
 # ── Packaging Helpers ───────────────────────────────────────────────────────
 
-## Ensures MicrosoftGame.config and storelogos/ exist in the content directory.
+## Ensures MicrosoftGame.config, logos, and VC14 dependency exist in the content directory.
 ## makepkg requires these alongside the game files.
 func _ensure_config_in_content_dir(content_dir: String) -> bool:
 	var project_dir = ProjectSettings.globalize_path("res://")
@@ -751,27 +751,61 @@ func _ensure_config_in_content_dir(content_dir: String) -> bool:
 		_log("❌ MicrosoftGame.config not found — create one first.")
 		return false
 
-	# Copy MicrosoftGame.config into content dir if not already there
-	if config_src != config_dest:
-		var dir = DirAccess.open(project_dir)
-		if dir:
-			dir.copy(config_src, config_dest)
-			_log("Copied MicrosoftGame.config to content directory")
+	# Read the config, patch it, and write to content dir
+	var file = FileAccess.open(config_src, FileAccess.READ)
+	if file == null:
+		_log("❌ Cannot read MicrosoftGame.config")
+		return false
+	var content = file.get_as_text()
+	file.close()
 
-	# Copy storelogos/ into content dir
-	var logos_src = project_dir.path_join("storelogos")
-	var logos_dest = content_dir.path_join("storelogos")
-	if DirAccess.dir_exists_absolute(logos_src):
-		DirAccess.make_dir_recursive_absolute(logos_dest)
-		var logos_dir = DirAccess.open(logos_src)
-		if logos_dir:
-			logos_dir.list_dir_begin()
-			var filename = logos_dir.get_next()
-			while filename != "":
-				if not logos_dir.current_is_dir() and filename.ends_with(".png"):
-					logos_dir.copy(logos_src.path_join(filename), logos_dest.path_join(filename))
-				filename = logos_dir.get_next()
-			logos_dir.list_dir_end()
+	# Add VC14 KnownDependency if not already present
+	if not content.contains("KnownDependency") and content.contains("</Game>"):
+		var dep_xml = '  <DesktopRegistration>\n    <DependencyList>\n      <KnownDependency Name="VC14"/>\n    </DependencyList>\n  </DesktopRegistration>\n'
+		content = content.replace("</Game>", dep_xml + "</Game>")
+		_log("Added VC14 KnownDependency to config")
+
+	file = FileAccess.open(config_dest, FileAccess.WRITE)
+	if file == null:
+		_log("❌ Cannot write to content directory")
+		return false
+	file.store_string(content)
+	file.close()
+	_log("Copied MicrosoftGame.config to content directory")
+
+	# Parse the config to find where logos are referenced
+	var info = _config_mgr.parse_config()
+	var logo_keys := {
+		"store_logo": "StoreLogo",
+		"logo_150": "Square150x150Logo",
+		"logo_44": "Square44x44Logo",
+		"logo_480": "Square480x480Logo",
+		"splash_screen": "SplashScreenImage",
+	}
+
+	# Copy each logo to the path the config expects (relative to content dir)
+	for key in logo_keys:
+		var rel_path: String = info.get(key, "")
+		if rel_path == "":
+			# Default name at root if not in config
+			rel_path = logo_keys[key] + ".png"
+		var normalized = rel_path.replace("\\", "/")
+		var dest_path = content_dir.path_join(normalized)
+
+		# Find the source — check storelogos/ first, then project root
+		var src_path = ""
+		var filename = normalized.get_file()
+		var storelogos_src = project_dir.path_join("storelogos").path_join(filename)
+		var root_src = project_dir.path_join(filename)
+		if FileAccess.file_exists(storelogos_src):
+			src_path = storelogos_src
+		elif FileAccess.file_exists(root_src):
+			src_path = root_src
+
+		if src_path != "":
+			var dest_dir = dest_path.get_base_dir()
+			DirAccess.make_dir_recursive_absolute(dest_dir)
+			DirAccess.open(project_dir).copy(src_path, dest_path)
 
 	return true
 
