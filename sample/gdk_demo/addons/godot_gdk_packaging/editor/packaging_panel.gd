@@ -42,6 +42,7 @@ var _sandbox_id_edit: LineEdit
 var _sandbox_set_btn: Button
 var _sandbox_retail_btn: Button
 var _dev_account_label: Label
+var _test_account_edit: LineEdit
 
 # Actions
 var _genmap_btn: Button
@@ -287,6 +288,29 @@ func _build_sandbox_ui(root: VBoxContainer) -> void:
 	test_accounts_btn.tooltip_text = "Open the Xbox Live Test Account GUI"
 	test_accounts_btn.pressed.connect(_on_open_test_accounts)
 	dev_btn_row.add_child(test_accounts_btn)
+
+	root.add_child(HSeparator.new())
+
+	# ── Test Account ──
+	_add_section_header(root, "Active Test Account")
+
+	var test_row := HBoxContainer.new()
+	root.add_child(test_row)
+	var test_label := Label.new()
+	test_label.text = "Gamertag / Email"
+	test_label.custom_minimum_size.x = 130
+	test_row.add_child(test_label)
+	_test_account_edit = LineEdit.new()
+	_test_account_edit.placeholder_text = "e.g. TestAccount1 or test@xboxtest.com"
+	_test_account_edit.size_flags_horizontal = SIZE_EXPAND_FILL
+	test_row.add_child(_test_account_edit)
+
+	var test_hint := Label.new()
+	test_hint.text = "Sign into this account via the Xbox App before running your game."
+	test_hint.add_theme_font_size_override("font_size", 11)
+	test_hint.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	test_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	root.add_child(test_hint)
 
 
 func _build_config_ui(root: VBoxContainer) -> void:
@@ -759,6 +783,7 @@ func _load_packaging_settings() -> void:
 	_encrypt_key_edit.text = cfg.get_value("packaging", "encrypt_key", "")
 	_updcompat_option.selected = cfg.get_value("packaging", "updcompat_option", 0)
 	_sandbox_id_edit.text = cfg.get_value("sandbox", "sandbox_id", "")
+	_test_account_edit.text = cfg.get_value("sandbox", "test_account", "")
 	# Trigger visibility update for encrypt key field
 	_on_encrypt_changed(_encrypt_option.selected)
 	_on_auto_genmap_toggled(_auto_genmap_check.button_pressed)
@@ -775,12 +800,14 @@ func _save_packaging_settings() -> void:
 	cfg.set_value("packaging", "encrypt_key", _encrypt_key_edit.text)
 	cfg.set_value("packaging", "updcompat_option", _updcompat_option.selected)
 	cfg.set_value("sandbox", "sandbox_id", _sandbox_id_edit.text)
+	cfg.set_value("sandbox", "test_account", _test_account_edit.text)
 	cfg.save(PACKAGING_SETTINGS_PATH)
 
 func _connect_autosave() -> void:
 	var save_fn = func(_arg = null): _save_packaging_settings()
 	for edit in [_source_dir_edit, _map_file_edit, _output_dir_edit,
-			_content_id_edit, _product_id_edit, _encrypt_key_edit, _sandbox_id_edit]:
+			_content_id_edit, _product_id_edit, _encrypt_key_edit, _sandbox_id_edit,
+			_test_account_edit]:
 		edit.text_changed.connect(save_fn)
 		edit.focus_exited.connect(_save_packaging_settings)
 	_auto_genmap_check.toggled.connect(save_fn)
