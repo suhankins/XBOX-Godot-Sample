@@ -4,7 +4,7 @@
 		Root singleton for Microsoft GDK integration.
 	</brief_description>
 	<description>
-		GDK is the engine singleton that provides access to Microsoft GDK runtime services including users, achievements, presence, social, and multiplayer activity. Access via [code]GDK[/code] in GDScript after the extension loads. Call [method initialize] to start the runtime and [method dispatch] every frame to pump async completions.
+		GDK is the engine singleton that provides access to Microsoft GDK runtime services including users, achievements, presence, social, and multiplayer activity. Access via [code]GDK[/code] in GDScript after the extension loads. Call [method initialize] to start the runtime. By default the addon pumps completions automatically each process frame through [code]gdk/runtime/embed_dispatch[/code]; call [method dispatch] manually when that setting is disabled or when you need deterministic control.
 	</description>
 	<tutorials></tutorials>
 	<methods>
@@ -36,7 +36,7 @@
 		<method name="dispatch">
 			<return type="int" />
 			<description>
-				Pumps the GDK async task queue. Call this every frame to process pending async completions. Returns the number of tasks dispatched.
+				Manually pumps the GDK async task queue and manager-driven state. Use this when [code]gdk/runtime/embed_dispatch[/code] is disabled or when you want deterministic control over completion timing. Returns the number of tasks dispatched.
 			</description>
 		</method>
 		<method name="get_last_error" qualifiers="const">

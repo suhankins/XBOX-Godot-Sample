@@ -128,7 +128,6 @@ func _build_scenario_catalog() -> Dictionary:
 				"Initialize, inspect, and shut down the root GDK runtime singleton.",
 				[
 					_scenario("runtime_initialize", "Initialize Runtime", "Call GDK.initialize() and report the resulting GDKResult.", Callable(self, "_scenario_initialize_runtime")),
-					_scenario("runtime_dispatch", "Dispatch Once", "Pump one manual dispatch tick and report how many completions were serviced.", Callable(self, "_scenario_dispatch_once")),
 					_scenario("runtime_last_error", "Show Last Error", "Read GDK.get_last_error() and add the current error state to the log.", Callable(self, "_scenario_show_last_error")),
 					_scenario("runtime_shutdown", "Shutdown Runtime", "Call GDK.shutdown() so the shell returns to an uninitialized state.", Callable(self, "_scenario_shutdown_runtime"))
 				]
@@ -505,19 +504,6 @@ func _scenario_initialize_runtime() -> void:
 	var result = gdk.initialize()
 	var status = _describe_result(result)
 	_log_event("Initialize Runtime -> %s" % status)
-	_set_selected_status(entry, status)
-	_refresh_state_panel()
-
-func _scenario_dispatch_once() -> void:
-	var entry = _selected_entry
-	var gdk = _gdk()
-	if gdk == null:
-		_set_selected_status(entry, "GDK singleton unavailable.")
-		return
-
-	var dispatch_count = gdk.dispatch()
-	var status = "dispatch() serviced %d completion(s)." % dispatch_count
-	_log_event("Dispatch Once -> %s" % status)
 	_set_selected_status(entry, status)
 	_refresh_state_panel()
 

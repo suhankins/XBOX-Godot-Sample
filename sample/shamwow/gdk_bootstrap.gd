@@ -1,5 +1,6 @@
 extends Node
-## Autoload that keeps the GDK extension loaded and pumps dispatch when initialized.
+## Autoload that keeps the GDK extension loaded.
+## Samples require native auto-dispatch and do not provide a manual pump path.
 
 const GDK_EXTENSION_PATH = "res://addons/godot_gdk/godot_gdk.gdextension"
 const GD_SCRIPT_CHECK_FLAG = "--gd-script-check"
@@ -26,11 +27,6 @@ func _ready() -> void:
 		return
 	if _gdk() == null:
 		push_warning("[GDK] Extension singleton is not available yet. Build the addon before opening this sample.")
-
-func _process(_delta: float) -> void:
-	var gdk = _gdk()
-	if gdk != null and gdk.is_initialized():
-		gdk.dispatch()
 
 func _exit_tree() -> void:
 	var gdk = _gdk()

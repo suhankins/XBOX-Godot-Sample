@@ -37,7 +37,11 @@ window/stretch/scale_mode="integer"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/godot_gdk/plugin.cfg", "res://addons/godot_gameinput/plugin.cfg")
+enabled=PackedStringArray("res://addons/godot_gdk/plugin.cfg", "res://addons/godot_gdk_packaging/plugin.cfg", "res://addons/godot_gameinput/plugin.cfg")
+
+[gdk]
+
+runtime/embed_dispatch=true
 
 [game_input]
 
