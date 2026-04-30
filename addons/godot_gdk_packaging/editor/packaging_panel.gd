@@ -636,14 +636,14 @@ func _refresh_config_preview(info: Dictionary) -> void:
 		key_label.text = label_text
 		key_label.custom_minimum_size.x = 120
 		key_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
-		key_label.add_theme_font_size_override("font_size", 12)
+		key_label.add_theme_font_size_override("font_size", 14)
 		key_label.tooltip_text = tooltip
 		key_label.mouse_filter = Control.MOUSE_FILTER_PASS
 		row.add_child(key_label)
 
 		var val_label := Label.new()
 		val_label.text = value
-		val_label.add_theme_font_size_override("font_size", 12)
+		val_label.add_theme_font_size_override("font_size", 14)
 		val_label.size_flags_horizontal = SIZE_EXPAND_FILL
 		val_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		val_label.tooltip_text = tooltip
