@@ -34,6 +34,12 @@ var _config_identity_label: Label
 var _edit_config_btn: Button
 var _create_config_btn: Button
 
+# Sandbox
+var _sandbox_label: Label
+var _sandbox_id_edit: LineEdit
+var _sandbox_set_btn: Button
+var _sandbox_retail_btn: Button
+
 # Actions
 var _genmap_btn: Button
 var _validate_btn: Button
@@ -64,6 +70,7 @@ func _ready() -> void:
 	_makepkg = MakePkgExecutorScript.new(_toolchain)
 	_config_mgr = GameConfigManagerScript.new(_toolchain)
 	_build_ui()
+	_refresh_sandbox_status()
 	_refresh_config_status()
 	set_process(true)
 
@@ -153,6 +160,43 @@ func _build_ui() -> void:
 	else:
 		_status_label.text = "❌ GDK not found — install Microsoft GDK"
 	root.add_child(_status_label)
+
+	root.add_child(HSeparator.new())
+
+	# ── Sandbox Switcher ──
+	_add_section_header(root, "PC Sandbox")
+
+	_sandbox_label = Label.new()
+	_sandbox_label.text = "Current: checking..."
+	root.add_child(_sandbox_label)
+
+	var sandbox_row := HBoxContainer.new()
+	root.add_child(sandbox_row)
+	var sandbox_id_label := Label.new()
+	sandbox_id_label.text = "Sandbox ID"
+	sandbox_id_label.custom_minimum_size.x = 130
+	sandbox_row.add_child(sandbox_id_label)
+	_sandbox_id_edit = LineEdit.new()
+	_sandbox_id_edit.placeholder_text = "e.g. XDKS.1"
+	_sandbox_id_edit.size_flags_horizontal = SIZE_EXPAND_FILL
+	sandbox_row.add_child(_sandbox_id_edit)
+
+	var sandbox_btn_row := HBoxContainer.new()
+	root.add_child(sandbox_btn_row)
+	_sandbox_set_btn = Button.new()
+	_sandbox_set_btn.text = "Set Sandbox"
+	_sandbox_set_btn.pressed.connect(_on_sandbox_set)
+	sandbox_btn_row.add_child(_sandbox_set_btn)
+
+	_sandbox_retail_btn = Button.new()
+	_sandbox_retail_btn.text = "Switch to RETAIL"
+	_sandbox_retail_btn.pressed.connect(_on_sandbox_retail)
+	sandbox_btn_row.add_child(_sandbox_retail_btn)
+
+	var sandbox_refresh_btn := Button.new()
+	sandbox_refresh_btn.text = "Refresh"
+	sandbox_refresh_btn.pressed.connect(_refresh_sandbox_status)
+	sandbox_btn_row.add_child(sandbox_refresh_btn)
 
 	root.add_child(HSeparator.new())
 
@@ -391,6 +435,69 @@ func _log_result(result: Dictionary) -> void:
 	else:
 		_log("Failed with exit code " + str(result["exit_code"]))
 		push_error("[GDK Packaging] Command failed with exit code " + str(result["exit_code"]))
+
+
+# ── Sandbox ─────────────────────────────────────────────────────────────────
+
+func _refresh_sandbox_status() -> void:
+	var sandbox_exe = _toolchain.get_sandbox_path()
+	if sandbox_exe == "":
+		_sandbox_label.text = "Current: XblPCSandbox.exe not found"
+		_sandbox_set_btn.disabled = true
+		_sandbox_retail_btn.disabled = true
+		return
+
+	var result = _toolchain.execute_tool(sandbox_exe, PackedStringArray(["/get"]))
+	if result["exit_code"] == 0:
+		var output: String = result["stdout"].strip_edges()
+		# Parse the sandbox name from output like "Current Xbox Live sandbox: XDKS.1"
+		var idx = output.find(":")
+		if idx >= 0:
+			var sandbox_name = output.substr(idx + 1).strip_edges()
+			_sandbox_label.text = "Current: %s" % sandbox_name
+			if sandbox_name != "" and sandbox_name != "RETAIL":
+				_sandbox_id_edit.text = sandbox_name
+		else:
+			_sandbox_label.text = "Current: %s" % output
+	else:
+		_sandbox_label.text = "Current: could not determine"
+	_sandbox_set_btn.disabled = false
+	_sandbox_retail_btn.disabled = false
+
+func _on_sandbox_set() -> void:
+	var sandbox_id = _sandbox_id_edit.text.strip_edges()
+	if sandbox_id == "":
+		_sandbox_label.text = "Enter a sandbox ID first"
+		return
+
+	_sandbox_label.text = "Switching to %s..." % sandbox_id
+	_sandbox_set_btn.disabled = true
+	_sandbox_retail_btn.disabled = true
+	_log("Setting sandbox to: %s" % sandbox_id)
+
+	var sandbox_exe = _toolchain.get_sandbox_path()
+	var result = _toolchain.execute_tool(sandbox_exe, PackedStringArray(["/set", sandbox_id, "/noApps"]))
+	if result["exit_code"] == 0:
+		_log("Sandbox set to %s" % sandbox_id)
+	else:
+		_log("Sandbox switch failed: %s" % result["stdout"])
+		push_warning("[GDK] Sandbox switch failed — may need admin privileges")
+	_refresh_sandbox_status()
+
+func _on_sandbox_retail() -> void:
+	_sandbox_label.text = "Switching to RETAIL..."
+	_sandbox_set_btn.disabled = true
+	_sandbox_retail_btn.disabled = true
+	_log("Switching sandbox to RETAIL")
+
+	var sandbox_exe = _toolchain.get_sandbox_path()
+	var result = _toolchain.execute_tool(sandbox_exe, PackedStringArray(["/retail", "/noApps"]))
+	if result["exit_code"] == 0:
+		_log("Sandbox set to RETAIL")
+	else:
+		_log("Sandbox switch failed: %s" % result["stdout"])
+		push_warning("[GDK] Sandbox switch failed — may need admin privileges")
+	_refresh_sandbox_status()
 
 
 # ── Config Status ───────────────────────────────────────────────────────────
