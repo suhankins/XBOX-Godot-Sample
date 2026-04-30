@@ -237,13 +237,19 @@ Fields:
 
 That split is the key design choice.
 
-Native work can run off-thread, but Godot-visible completion is only surfaced when the game calls:
+Native work can run off-thread, but Godot-visible completion is only surfaced on
+the main-thread pump. By default `godot_gdk` registers a frame callback and
+calls:
 
 ```gdscript
 GDK.dispatch()
 ```
 
-Internally this drains the queue with:
+each process frame while `gdk/runtime/embed_dispatch` is enabled. Games can
+still call `GDK.dispatch()` directly when that setting is disabled or when they
+need deterministic control.
+
+Internally `dispatch()` drains the queue with:
 
 ```cpp
 XTaskQueueDispatch(m_task_queue, XTaskQueuePort::Completion, 0)

@@ -67,11 +67,11 @@ void GDK::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_social"), &GDK::get_social);
     ClassDB::bind_method(D_METHOD("get_multiplayer_activity"), &GDK::get_multiplayer_activity);
 
-    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "users", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT, "GDKUsers"), "", "get_users");
-    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "achievements", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT, "GDKAchievements"), "", "get_achievements");
-    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "presence", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT, "GDKPresence"), "", "get_presence");
-    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "social", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT, "GDKSocial"), "", "get_social");
-    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "multiplayer_activity", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT, "GDKMultiplayerActivity"), "", "get_multiplayer_activity");
+    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "users", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_SCRIPT_VARIABLE, "GDKUsers"), "", "get_users");
+    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "achievements", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_SCRIPT_VARIABLE, "GDKAchievements"), "", "get_achievements");
+    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "presence", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_SCRIPT_VARIABLE, "GDKPresence"), "", "get_presence");
+    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "social", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_SCRIPT_VARIABLE, "GDKSocial"), "", "get_social");
+    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "multiplayer_activity", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_SCRIPT_VARIABLE, "GDKMultiplayerActivity"), "", "get_multiplayer_activity");
 
     ADD_SIGNAL(MethodInfo("initialized"));
     ADD_SIGNAL(MethodInfo("shutdown_completed"));
@@ -184,7 +184,7 @@ bool GDK::is_initialized() const {
 }
 
 int64_t GDK::dispatch() {
-    return static_cast<int64_t>(m_runtime->dispatch() + m_achievements->dispatch() + m_social->dispatch() + m_multiplayer_activity->dispatch());
+    return static_cast<int64_t>(m_runtime->dispatch() + m_achievements->dispatch() + m_social->dispatch());
 }
 
 Ref<GDKResult> GDK::get_last_error() const {

@@ -358,8 +358,8 @@ availability_changed(available: bool)
 #### Runtime behavior
 
 - `initialize()` sets up the GDK runtime and the shared `XTaskQueue`.
-- `dispatch()` dispatches pending completions when automatic dispatch is disabled.
-- `gdk/runtime/embed_dispatch` enables automatic per-frame dispatch from the main thread.
+- `dispatch()` manually dispatches pending completions when automatic dispatch is disabled or when deterministic control is needed.
+- `gdk/runtime/embed_dispatch` defaults to `true` and enables automatic per-frame dispatch from the main thread.
 
 #### Native runtime mapping
 

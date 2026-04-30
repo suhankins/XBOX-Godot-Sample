@@ -1,6 +1,6 @@
 ---
 description: Godot GDK addon architecture, async model, script conventions, and sample workflow
-applyTo: "addons/godot_gdk/**, sample/addons/godot_gdk/**, sample/gdk_bootstrap.gd, sample/main.gd, sample/main.tscn, sample/MicrosoftGame.config, sample/project.godot, sample/sample_config.cfg.template, sample/tests/**, docs/godot-gdk-*.md, spec/gdext-gdk.md, tools/setup_sample.ps1"
+applyTo: "addons/godot_gdk/**, sample/gdk_demo/addons/godot_gdk/**, sample/gdk_demo/gdk_bootstrap.gd, sample/gdk_demo/main.gd, sample/gdk_demo/main.tscn, sample/gdk_demo/MicrosoftGame.config, sample/gdk_demo/project.godot, sample/gdk_demo/sample_config.cfg.template, sample/gdk_demo/tests/**, docs/godot-gdk-*.md, spec/gdext-gdk.md, tools/setup_sample.ps1"
 ---
 
 # Godot GDK Addon Instructions
@@ -17,7 +17,8 @@ applyTo: "addons/godot_gdk/**, sample/addons/godot_gdk/**, sample/gdk_bootstrap.
 - `GDKRuntime` owns one shared `XTaskQueue` with:
   - `ThreadPool` work dispatch
   - `Manual` completion dispatch
-- Games and the sample are expected to call `GDK.dispatch()` regularly. This pumps both `XAsync` completions and manager-driven state.
+- `gdk/runtime/embed_dispatch` defaults to `true`. On Godot 4.5+ builds, the addon auto-pumps `GDK.dispatch()` from Godot's main thread each process frame via the engine frame callback path.
+- On Godot 4.3/4.4 builds, auto-pumping is not available through `embed_dispatch`; games, samples, and tests must keep calling `GDK.dispatch()` manually each frame. Manual pumping is also the required path whenever `embed_dispatch` is disabled or deterministic control is needed. This pump still covers both `XAsync` completions and manager-driven state.
 - Use `GDKAsyncOp` only for true `XAsyncBlock`-backed requests.
 - Use `GDKDispatchOp` for manager/event-driven one-shot waits such as Achievements Manager and future Social Manager flows.
 - Immediate failures should still return an already-completed op of the appropriate type.
@@ -44,6 +45,12 @@ applyTo: "addons/godot_gdk/**, sample/addons/godot_gdk/**, sample/gdk_bootstrap.
 - Add new implementation files to `addons\godot_gdk\CMakeLists.txt`.
 - When exposing object-returning properties from C++, set the `PropertyInfo` class name (for example `GDKUsers` or `GDKAchievements`) so Godot does not instantiate anonymous object defaults.
 
+## Public API Documentation Contract
+
+- Public Godot-facing classes in `godot_gdk` should have matching documentation under `addons\godot_gdk\doc_classes\`.
+- When public methods, properties, signals, enums, or behavior change, update the relevant `doc_classes\*.xml` in the same change.
+- The addon CMake already collects `doc_classes\*.xml` automatically for editor and debug-template builds; keep the XML set aligned with the script-visible surface instead of treating it as optional follow-up documentation.
+
 ## GDScript and Editor Script Rules
 
 - In the GDK-owned `sample\` scripts and in `addons\godot_gdk\editor\`, avoid `:=` when the right-hand side comes from Variant-returning engine APIs. Prefer explicit `: Type = ...` or plain `=`.
@@ -53,10 +60,17 @@ applyTo: "addons/godot_gdk/**, sample/addons/godot_gdk/**, sample/gdk_bootstrap.
 ## Sample, Docs, and Tooling Workflow
 
 - The GDK-owned sample surfaces under `sample\` are part of the addon contract. Update them when public `godot_gdk` behavior changes.
+- When public `godot_gdk` API or behavior changes, keep `doc_classes`, `docs\godot-gdk-*.md`, `spec\gdext-gdk.md`, the sample, and tests aligned in the same change.
+- For `.gd` changes in the GDK-owned sample or editor/plugin scripts, run the repo headless validator:
+
+```powershell
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\check_gd_scripts_headless.ps1
+```
+
 - The headless test entry point for this addon is:
 
 ```powershell
-cd sample
+cd sample/gdk_demo
 godot --headless --script res://tests/run_tests.gd
 ```
 
@@ -66,5 +80,5 @@ godot --headless --script res://tests/run_tests.gd
 cmake --build build --preset debug
 ```
 
-  so the `sample\addons\godot_gdk\` copy is refreshed.
+  so the `sample\gdk_demo\addons\godot_gdk\` copy is refreshed.
 - Keep `docs\godot-gdk-*.md`, `spec\gdext-gdk.md`, and `tools\setup_sample.ps1` aligned with the current addon architecture and sample workflow when those surfaces change.

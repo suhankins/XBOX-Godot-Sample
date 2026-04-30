@@ -43,6 +43,16 @@ target_compile_definitions(godot_gdk PRIVATE _GAMING_DESKTOP)
 
 godot_addon_configure_target(TARGET godot_gdk ADDON_NAME godot_gdk)
 
+if(GODOTCPP_TARGET MATCHES "editor|template_debug")
+    file(GLOB_RECURSE DOC_XML LIST_DIRECTORIES NO CONFIGURE_DEPENDS
+         "${CMAKE_CURRENT_SOURCE_DIR}/doc_classes/*.xml")
+    godot_addon_doc_sources(
+        TARGET     godot_gdk
+        ADDON_NAME godot_gdk
+        SOURCES    ${DOC_XML}
+    )
+endif()
+
 godot_addon_copy_runtime_files(
     TARGET godot_gdk
     ADDON_NAME godot_gdk

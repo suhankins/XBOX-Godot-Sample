@@ -1,5 +1,6 @@
 #include "register_types.h"
 
+#include <godot_cpp/classes/project_settings.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/classes/engine.hpp>
 #include <gdextension_interface.h>
@@ -19,9 +20,58 @@ using namespace godot;
 
 static GDK *gdk_singleton = nullptr;
 
+namespace {
+
+constexpr const char *GDK_RUNTIME_EMBED_DISPATCH_SETTING = "gdk/runtime/embed_dispatch";
+constexpr bool GDK_RUNTIME_EMBED_DISPATCH_DEFAULT = true;
+
+void register_gdk_project_settings() {
+    ProjectSettings *project_settings = ProjectSettings::get_singleton();
+    if (project_settings == nullptr) {
+        return;
+    }
+
+    if (!project_settings->has_setting(GDK_RUNTIME_EMBED_DISPATCH_SETTING)) {
+        project_settings->set_setting(GDK_RUNTIME_EMBED_DISPATCH_SETTING, GDK_RUNTIME_EMBED_DISPATCH_DEFAULT);
+    }
+
+    project_settings->set_initial_value(GDK_RUNTIME_EMBED_DISPATCH_SETTING, GDK_RUNTIME_EMBED_DISPATCH_DEFAULT);
+    project_settings->set_as_basic(GDK_RUNTIME_EMBED_DISPATCH_SETTING, true);
+
+    Dictionary setting_info;
+    setting_info["name"] = GDK_RUNTIME_EMBED_DISPATCH_SETTING;
+    setting_info["type"] = Variant::BOOL;
+    setting_info["hint"] = PROPERTY_HINT_NONE;
+    setting_info["hint_string"] = "";
+    project_settings->add_property_info(setting_info);
+}
+
+bool is_embed_dispatch_enabled() {
+    ProjectSettings *project_settings = ProjectSettings::get_singleton();
+    if (project_settings == nullptr) {
+        return GDK_RUNTIME_EMBED_DISPATCH_DEFAULT;
+    }
+
+    return static_cast<bool>(project_settings->get_setting(
+            GDK_RUNTIME_EMBED_DISPATCH_SETTING,
+            GDK_RUNTIME_EMBED_DISPATCH_DEFAULT));
+}
+
+#if GODOT_VERSION_MINOR >= 5
+void gdk_frame_callback() {
+    if (gdk_singleton == nullptr || !gdk_singleton->is_initialized() || !is_embed_dispatch_enabled()) {
+        return;
+    }
+
+    gdk_singleton->dispatch();
+}
+#endif
+
+} // namespace
+
 void initialize_gdk_extension(ModuleInitializationLevel p_level) {
     if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
-        ClassDB::register_class<GDK>();
+        ClassDB::register_abstract_class<GDK>();
         ClassDB::register_class<GDKResult>();
         ClassDB::register_class<GDKAsyncOp>();
         ClassDB::register_class<GDKDispatchOp>();
@@ -40,6 +90,7 @@ void initialize_gdk_extension(ModuleInitializationLevel p_level) {
 
         gdk_singleton = memnew(GDK);
         Engine::get_singleton()->register_singleton("GDK", GDK::get_singleton());
+        register_gdk_project_settings();
     }
 }
 
@@ -65,6 +116,9 @@ GDExtensionBool GDE_EXPORT gdk_extension_init(
 
     init_obj.register_initializer(initialize_gdk_extension);
     init_obj.register_terminator(uninitialize_gdk_extension);
+#if GODOT_VERSION_MINOR >= 5
+    init_obj.register_frame_callback(gdk_frame_callback);
+#endif
     init_obj.set_minimum_library_initialization_level(MODULE_INITIALIZATION_LEVEL_SCENE);
 
     return init_obj.init();
