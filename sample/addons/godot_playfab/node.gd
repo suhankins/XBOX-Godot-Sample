@@ -14,7 +14,7 @@ func _run_playfab() -> void:
 	if pf_services == null:
 		push_warning("[GDK] Extension not loaded")
 	
-	var titleid = "99DA"
+	var titleid = "INSERT_TITLE_ID_HERE"
 	pf_services.initialize(titleid)
 	
 	var is_initialize = pf_core.is_initialized()
