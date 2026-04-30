@@ -163,7 +163,7 @@ func _build_ui() -> void:
 	tab_bar.add_tab("🏆 Achievements")
 	tab_bar.clip_tabs = false
 	tab_bar.size_flags_horizontal = SIZE_EXPAND_FILL
-	tab_bar.add_theme_font_size_override("font_size", 16)
+	tab_bar.add_theme_font_size_override("font_size", 18)
 	outer.add_child(tab_bar)
 
 	# ── Content pages (one per tab) ──
