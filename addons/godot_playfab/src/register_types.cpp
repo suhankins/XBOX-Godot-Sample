@@ -2,23 +2,48 @@
 #include <gdextension_interface.h>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/core/defs.hpp>
+#include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/godot.hpp>
 
-#include "PlayFabManager.h"
+#include <PFCore/PlayFabCore.h>
+#include <PFCore/PlayFabServiceConfig.h>
+#include <PFCore/PlayFabAuthentication.h>
+#include <PlayFabServices.h>
+#include <EntityHandle.h>
+#include <PartyImpl.h>
 
 using namespace godot;
+
+static PlayFabCore *playfabCore_singleton = nullptr;
+static PlayFabServices *playfabServices_singleton = nullptr;
 
 void initialize_gdextension_types(ModuleInitializationLevel p_level)
 {
 	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
-		return;
 	}
-	GDREGISTER_RUNTIME_CLASS(PlayFabManager);
+	GDREGISTER_RUNTIME_CLASS(PlayFabCore);
+	GDREGISTER_RUNTIME_CLASS(PlayFabServices);
+
+	playfabCore_singleton = memnew(PlayFabCore);
+	Engine::get_singleton()->register_singleton("PlayFabCore", PlayFabCore::get_singleton());
+
+	playfabServices_singleton = memnew(PlayFabServices);
+	Engine::get_singleton()->register_singleton("PlayFabServices", PlayFabServices::get_singleton());
+
 }
 
 void uninitialize_gdextension_types(ModuleInitializationLevel p_level) {
 	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
-		return;
+	}
+	Engine::get_singleton()->unregister_singleton("PlayFabCore");
+	if (playfabCore_singleton) {
+		memdelete(playfabCore_singleton);
+		playfabCore_singleton = nullptr;
+	}
+	Engine::get_singleton()->unregister_singleton("PlayFabServices");
+	if (playfabServices_singleton) {
+		memdelete(playfabServices_singleton);
+		playfabServices_singleton = nullptr;
 	}
 }
 

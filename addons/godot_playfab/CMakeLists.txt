@@ -13,13 +13,17 @@ gdk_detect_dependencies(
 add_library(godot_playfab SHARED
     src/GenericPlayer.cpp
     src/pch.cpp
-    src/PFUtils.cpp
-    src/PlayFabManager.cpp
+    src/PFCore/PlayFabCore.cpp
+    src/PFCore/PlayFabServiceConfig.cpp
+    src/PFCore/PlayFabAuthentication.cpp
+    src/PlayFabServices.cpp
+    src/EntityHandle.cpp
     src/register_types.cpp
 )
 
 target_include_directories(godot_playfab PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/PFCore"
     "${CMAKE_CURRENT_SOURCE_DIR}/WinGDK"
     "${GDK_WINDOWS}/include"
     "${GDK_WINDOWS}/include/httpClient"
