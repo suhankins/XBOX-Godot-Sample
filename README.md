@@ -8,6 +8,7 @@ A repository of Godot 4.x GDExtension addons for the Microsoft public GDK
 | Addon | Description | Status |
 |-------|-------------|--------|
 | [`godot_gdk`](addons/godot_gdk/) | GDK runtime, Xbox user identity, Xbox achievements, Xbox presence, Xbox social graph, Xbox multiplayer activity | Runtime/users/achievements/presence/social/multiplayer-activity baseline |
+| [`godot_playfab`](addons/godot_playfab/) | PlayFab runtime bootstrap, manual PlayFab sign-in, PlayFab Game Saves, and PlayFab leaderboards | Root runtime/users/game-saves/leaderboards baseline |
 | [`godot_gameinput`](addons/godot_gameinput/) | Native GameInput controller support — devices, polling, vibration, action bridge | v1: Devices, Polling, Vibration, Action Bridge |
 | [`godot_gdk_packaging`](addons/godot_gdk_packaging/) | GDScript editor plugin for PC MSIXVC packaging via `makepkg.exe` | Editor plugin (no C++ build) |
 
@@ -64,6 +65,7 @@ godot-cpp/                # godot-cpp submodule
 sample/                   # Sample projects
   gdk_demo/              #   GDK addon demo and tests
   multiplayer_pong/      #   Multiplayer pong (from godot-demo-projects)
+  playfab_demo/          #   PlayFab init/sign-in smoke-test sample
   gdk_launch_point/      #   GDK Launch Point scenario shell sample
 spec/                     # Design spec documents
 tools/                    # CLI helper scripts
@@ -74,6 +76,7 @@ tools/                    # CLI helper scripts
 - `sample\gdk_demo\` — baseline runtime/users/achievements demo
 - `sample\gdk_launch_point\` — scenario-driven launch point built around grouped runtime/users/achievements/multiplayer-activity actions and an event log
 - `sample\multiplayer_pong\` — multiplayer pong with Xbox identity and single player mode
+- `sample\playfab_demo\` — PlayFab root singleton smoke test with manual sign-in
 
 ## Documentation
 
@@ -87,6 +90,8 @@ Full documentation lives in [`docs/`](docs/README.md):
   config, sandbox, test accounts
 - [**GameInput Addon**](docs/godot-gameinput.md) — devices, polling,
   vibration, action bridge, sample integration
+- [**PlayFab Plugin Overview**](docs/godot-playfab-plugin.md) — PlayFab
+  runtime, project settings, user sessions, Game Saves, and leaderboards
 - [**Troubleshooting**](docs/troubleshooting.md) — common build and runtime
   issues
 

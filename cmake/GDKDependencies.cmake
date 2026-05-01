@@ -8,6 +8,7 @@ function(gdk_detect_dependencies)
         XSAPI_RUNTIME_DLL_OUT
         LIBHTTPCLIENT_RUNTIME_DLL_OUT
         PLAYFAB_CORE_RUNTIME_DLL_OUT
+        PLAYFAB_GAMESAVE_RUNTIME_DLL_OUT
         PLAYFAB_SERVICES_RUNTIME_DLL_OUT
         PLAYFAB_MULTIPLAYER_RUNTIME_DLL_OUT
         PLAYFAB_PARTY_RUNTIME_DLL_OUT
@@ -68,6 +69,12 @@ function(gdk_detect_dependencies)
             "Ensure the GDK is installed with Xbox Extensions.")
     endif()
 
+    if(NOT EXISTS "${GDK_WINDOWS}/include/playfab/gamesave/PFGameSaveFiles.h")
+        message(FATAL_ERROR
+            "PlayFab Game Save headers not found in: ${GDK_WINDOWS}/include/playfab/gamesave/\n"
+            "Ensure the GDK is installed with Xbox Extensions.")
+    endif()
+
     if(NOT EXISTS "${GDK_WINDOWS}/include/playfab/party/Party.h")
         message(FATAL_ERROR
             "PlayFab Party headers not found in: ${GDK_WINDOWS}/include/playfab/party/\n"
@@ -97,6 +104,10 @@ function(gdk_detect_dependencies)
 
     if(ARG_PLAYFAB_CORE_RUNTIME_DLL_OUT)
         set(${ARG_PLAYFAB_CORE_RUNTIME_DLL_OUT} "${GDK_WINDOWS}/bin/x64/PlayFabCore.dll" PARENT_SCOPE)
+    endif()
+
+    if(ARG_PLAYFAB_GAMESAVE_RUNTIME_DLL_OUT)
+        set(${ARG_PLAYFAB_GAMESAVE_RUNTIME_DLL_OUT} "${GDK_WINDOWS}/bin/x64/PlayFabGameSave.dll" PARENT_SCOPE)
     endif()
 
     if(ARG_PLAYFAB_SERVICES_RUNTIME_DLL_OUT)

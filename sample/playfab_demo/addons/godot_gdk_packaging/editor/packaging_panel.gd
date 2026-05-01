@@ -8,8 +8,9 @@ const MakePkgExecutorScript = preload("res://addons/godot_gdk_packaging/editor/m
 const GameConfigManagerScript = preload("res://addons/godot_gdk_packaging/editor/game_config_manager.gd")
 
 const SAMPLE_CONFIG_PATH := "res://sample_config.cfg"
-const PLAYFAB_CONFIG_PATH := "res://sample_pf_config.cfg"
 const PACKAGING_SETTINGS_PATH := "res://.gdk_packaging.cfg"
+const PLAYFAB_TITLE_ID_SETTING := "playfab/titleid"
+const PLAYFAB_ENDPOINT_SETTING := "playfab/endpoint"
 
 # Encryption option indices (must match OptionButton order in _build_packaging_ui)
 const ENCRYPT_NONE := 0
@@ -62,6 +63,7 @@ var _achievement_status_label: Label
 
 # PlayFab
 var _playfab_title_id_edit: LineEdit
+var _playfab_endpoint_edit: LineEdit
 var _playfab_status_label: Label
 var _playfab_version_label: Label
 
@@ -417,7 +419,7 @@ func _build_achievements_ui(root: VBoxContainer) -> void:
 ## Builds the PlayFab tab: Title ID field, Game Manager link, SDK version.
 func _build_playfab_ui(root: VBoxContainer) -> void:
 	var desc := Label.new()
-	desc.text = "Configure your PlayFab Title ID for Xbox Live integration.\nThe Title ID is used at runtime to connect to PlayFab services."
+	desc.text = "Configure PlayFab project settings for runtime sign-in and leaderboard requests.\nLeave the endpoint blank to use the default endpoint derived from the Title ID."
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc.add_theme_font_size_override("font_size", 12)
 	desc.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
@@ -437,6 +439,18 @@ func _build_playfab_ui(root: VBoxContainer) -> void:
 	_playfab_title_id_edit.placeholder_text = "e.g. A1B2C"
 	_playfab_title_id_edit.size_flags_horizontal = SIZE_EXPAND_FILL
 	title_row.add_child(_playfab_title_id_edit)
+
+	var endpoint_row := HBoxContainer.new()
+	root.add_child(endpoint_row)
+	var endpoint_label := Label.new()
+	endpoint_label.text = "PlayFab Endpoint"
+	endpoint_label.custom_minimum_size.x = 130
+	endpoint_label.tooltip_text = "Optional endpoint override. Leave blank to use https://<titleid>.playfabapi.com."
+	endpoint_row.add_child(endpoint_label)
+	_playfab_endpoint_edit = LineEdit.new()
+	_playfab_endpoint_edit.placeholder_text = "Optional override"
+	_playfab_endpoint_edit.size_flags_horizontal = SIZE_EXPAND_FILL
+	endpoint_row.add_child(_playfab_endpoint_edit)
 
 	var btn_row := HBoxContainer.new()
 	root.add_child(btn_row)
@@ -1239,28 +1253,23 @@ func _on_achievement_save() -> void:
 
 # ── PlayFab ─────────────────────────────────────────────────────────────────
 
-## Loads the PlayFab Title ID from sample_pf_config.cfg.
+## Loads the PlayFab project settings from project.godot.
 func _load_playfab_config() -> void:
-	var cfg := ConfigFile.new()
-	if cfg.load(PLAYFAB_CONFIG_PATH) == OK:
-		var val = cfg.get_value("playfab", "title_id", "")
-		_playfab_title_id_edit.text = str(val)
-		if val != "":
-			_playfab_status_label.text = "Loaded from sample_pf_config.cfg"
-		else:
-			_playfab_status_label.text = "No PlayFab Title ID set — enter one and save."
+	_playfab_title_id_edit.text = str(ProjectSettings.get_setting(PLAYFAB_TITLE_ID_SETTING, ""))
+	_playfab_endpoint_edit.text = str(ProjectSettings.get_setting(PLAYFAB_ENDPOINT_SETTING, ""))
+	if _playfab_title_id_edit.text.strip_edges() != "" or _playfab_endpoint_edit.text.strip_edges() != "":
+		_playfab_status_label.text = "Loaded from project.godot"
 	else:
-		_playfab_status_label.text = "No sample_pf_config.cfg — enter a value and save."
+		_playfab_status_label.text = "No PlayFab settings saved yet — enter values and save."
 
-## Saves the PlayFab Title ID to sample_pf_config.cfg.
+## Saves the PlayFab project settings to project.godot.
 func _on_playfab_save() -> void:
-	var cfg := ConfigFile.new()
-	cfg.load(PLAYFAB_CONFIG_PATH)
-	cfg.set_value("playfab", "title_id", _playfab_title_id_edit.text.strip_edges())
-	var err = cfg.save(PLAYFAB_CONFIG_PATH)
+	ProjectSettings.set_setting(PLAYFAB_TITLE_ID_SETTING, _playfab_title_id_edit.text.strip_edges())
+	ProjectSettings.set_setting(PLAYFAB_ENDPOINT_SETTING, _playfab_endpoint_edit.text.strip_edges())
+	var err = ProjectSettings.save()
 	if err == OK:
-		_playfab_status_label.text = "✅ Saved to sample_pf_config.cfg"
-		_log("PlayFab Title ID saved")
+		_playfab_status_label.text = "✅ Saved to project.godot"
+		_log("PlayFab settings saved")
 		var fs = EditorInterface.get_resource_filesystem()
 		if not fs.is_scanning():
 			fs.scan()

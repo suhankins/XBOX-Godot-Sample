@@ -1,7 +1,9 @@
-#ifndef EXAMPLE_REGISTER_TYPES_H
-#define EXAMPLE_REGISTER_TYPES_H
+#ifndef GODOT_PLAYFAB_REGISTER_TYPES_H
+#define GODOT_PLAYFAB_REGISTER_TYPES_H
 
-void initialize_gdextension_types();
-void uninitialize_gdextension_types();
+#include <godot_cpp/core/class_db.hpp>
 
-#endif // EXAMPLE_REGISTER_TYPES_H
+void initialize_playfab_extension(godot::ModuleInitializationLevel p_level);
+void uninitialize_playfab_extension(godot::ModuleInitializationLevel p_level);
+
+#endif // GODOT_PLAYFAB_REGISTER_TYPES_H

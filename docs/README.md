@@ -11,13 +11,14 @@ Microsoft public GDK.
 
 ## Sample projects
 
-Three sample projects live under `sample/`:
+Four sample projects live under `sample/`:
 
 | Sample | Description |
 |--------|-------------|
 | [`gdk_demo`](godot-gdk-sample-and-tests.md) | GDK addon demo + headless test suite |
 | [`gdk_launch_point`](godot-gdk-sample-and-tests.md) | GDK Launch Point scenario shell |
 | `multiplayer_pong` | Multiplayer pong with Xbox identity and single player AI |
+| `playfab_demo` | PlayFab sign-in smoke-test sample wired to the `PlayFab` root singleton |
 
 All samples share the same GDK setup. See [Sample Project Setup](godot-gdk-sample-setup.md)
 for Partner Center configuration.
@@ -54,6 +55,11 @@ for Partner Center configuration.
   checklist for things headless tests can't cover (real controllers, rumble,
   battery, hot-plug)
 
+## PlayFab addon (`godot_playfab`)
+
+- [**PlayFab Plugin Overview**](godot-playfab-plugin.md) — runtime configuration,
+  current implementation status, and sample usage
+
 ## Design specs
 
 Design intent documents live in [`spec/`](../spec/). These describe the planned
@@ -61,6 +67,7 @@ API surface and are not guaranteed to match the current implementation.
 
 - [`gdext-gdk.md`](../spec/gdext-gdk.md) — GDK addon design spec
 - [`gdext-gameinput.md`](../spec/gdext-gameinput.md) — GameInput addon design spec
+- [`gdext-playfab.md`](../spec/gdext-playfab.md) — PlayFab addon design spec
 
 ## Troubleshooting
 

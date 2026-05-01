@@ -171,12 +171,11 @@ Use the included helper script to wipe achievement progress:
 
 [font_size=14][b]PlayFab Title ID[/b][/font_size]
 Enter your Title ID from [b]Game Manager → Settings → API Keys[/b] and click [b]Save[/b].
-The value is stored in [b]sample_pf_config.cfg[/b] for runtime access.
+You can also set an optional endpoint override; leaving it blank uses the default endpoint derived from the Title ID.
 
 [font_size=14][b]Runtime Usage[/b][/font_size]
-[code]var cfg = ConfigFile.new()
-cfg.load("res://sample_pf_config.cfg")
-var title_id = cfg.get_value("playfab", "title_id", "")[/code]
+[code]var title_id = str(ProjectSettings.get_setting("playfab/titleid", ""))
+var endpoint = str(ProjectSettings.get_setting("playfab/endpoint", ""))[/code]
 
 [font_size=14][b]Tools[/b][/font_size]
 [color=#107c10]▸[/color]  [b]Open Game Manager[/b] — Opens the PlayFab portal
@@ -184,7 +183,7 @@ var title_id = cfg.get_value("playfab", "title_id", "")[/code]
 
 [color=#107c10]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/color]
 
-[color=#d4830b]⚠  Tip:[/color] PlayFab config is saved to a [i]separate[/i] file (sample_pf_config.cfg) to avoid overwriting other configs."""
+[color=#d4830b]⚠  Tip:[/color] These values are stored in [i]project.godot[/i] so the PlayFab runtime can read them directly."""
 		},
 		{
 			"title": "You're Ready!",
