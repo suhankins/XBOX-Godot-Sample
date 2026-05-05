@@ -7,9 +7,9 @@
 #include <godot_cpp/godot.hpp>
 
 #include "playfab.h"
-#include "playfab_async_op.h"
 #include "playfab_gamesaves.h"
 #include "playfab_leaderboards.h"
+#include "playfab_pending_signal.h"
 #include "playfab_result.h"
 #include "playfab_user.h"
 #include "playfab_users.h"
@@ -103,7 +103,7 @@ void initialize_playfab_extension(ModuleInitializationLevel p_level) {
 
     ClassDB::register_abstract_class<PlayFab>();
     ClassDB::register_class<PlayFabResult>();
-    ClassDB::register_class<PlayFabAsyncOp>();
+    ClassDB::register_internal_class<PlayFabPendingSignal>();
     ClassDB::register_class<PlayFabUser>();
     ClassDB::register_class<PlayFabUsers>();
     ClassDB::register_class<PlayFabGameSaves>();

@@ -18,13 +18,13 @@ This is the landing page for the `godot_playfab` docs set.
 - Game Saves add/sync, upload, folder/quota queries, cloud connectivity queries, save description updates, and cloud reset through `PlayFab.game_saves`
 - leaderboard submit, global query, around-user query, and friends/social leaderboard query
 - sample demo wired to the new root singleton
+- headless contract coverage under `sample\playfab_demo\tests\run_tests.gd`
 - idempotent extension registration so duplicated synced `.gdextension` files do not spam duplicate singleton/class registration
 
 ### Not implemented yet
 
 - broader PlayFab feature areas from the legacy codebase such as multiplayer or party services are not part of the new public root API
 - custom non-Windows Game Saves UI callback/response wrappers are not yet exposed as a public Godot surface
-- dedicated PlayFab regression tests beyond the repo build and headless GDScript validation
 
 ## Runtime configuration
 
@@ -42,8 +42,9 @@ The PlayFab runtime reads these settings from Project Settings:
 - `PlayFab.leaderboards`
 - `PlayFabGameSaves`
 - `PlayFabUser`
-- `PlayFabAsyncOp`
 - `PlayFabResult`
+
+All PlayFab one-shot async methods now return completion signals that you await directly. `PlayFab.users` is intentionally cache/result-driven and does not expose user lifecycle signals.
 
 ## Sample usage
 
@@ -54,13 +55,13 @@ if not PlayFab.is_initialized():
         push_warning(init_result.message)
         return
 
-var sign_in_result = await PlayFab.sign_in_async(GDK.users.get_primary_user()).completed
+var sign_in_result = await PlayFab.sign_in_async(GDK.users.get_primary_user())
 if not sign_in_result.ok:
     push_warning(sign_in_result.message)
     return
 
 var playfab_user = sign_in_result.data
-var gamesave_sync = await PlayFab.game_saves.add_user_with_ui_async(playfab_user).completed
+var gamesave_sync = await PlayFab.game_saves.add_user_with_ui_async(playfab_user)
 if not gamesave_sync.ok:
     push_warning(gamesave_sync.message)
     return
@@ -71,7 +72,7 @@ if not save_folder_result.ok:
     return
 
 print("Game Saves folder: %s" % save_folder_result.data)
-await PlayFab.leaderboards.submit_score_async(playfab_user, "pong_score", 42).completed
+await PlayFab.leaderboards.submit_score_async(playfab_user, "pong_score", 42)
 ```
 
 ## Reference

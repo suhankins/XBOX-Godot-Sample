@@ -20,7 +20,7 @@
 
 namespace godot {
 
-class PlayFabAsyncOp;
+class PlayFabPendingSignal;
 class PlayFabResult;
 
 class PlayFabRuntime {
@@ -31,7 +31,7 @@ class PlayFabRuntime {
     PFServiceConfigHandle m_service_config_handle = nullptr;
     String m_title_id;
     String m_endpoint;
-    std::vector<Ref<PlayFabAsyncOp>> m_active_ops;
+    std::vector<Ref<PlayFabPendingSignal>> m_active_pending_signals;
     Ref<PlayFabResult> m_last_error;
 
     static void CALLBACK _queue_terminated(void *p_context);
@@ -52,10 +52,10 @@ public:
     String get_title_id() const;
     String get_endpoint() const;
 
-    void retain_op(const Ref<PlayFabAsyncOp> &p_op);
-    void release_op(PlayFabAsyncOp *p_op);
-    Ref<PlayFabAsyncOp> make_completed_async_op(const Ref<PlayFabResult> &p_result);
-    Ref<PlayFabAsyncOp> make_error_async_op(HRESULT p_hresult, const String &p_code, const String &p_message, const Variant &p_data = Variant());
+    void retain_pending_signal(const Ref<PlayFabPendingSignal> &p_pending_signal);
+    void release_pending_signal(PlayFabPendingSignal *p_pending_signal);
+    Ref<PlayFabPendingSignal> make_pending_signal();
+    Signal make_error_signal(HRESULT p_hresult, const String &p_code, const String &p_message, const Variant &p_data = Variant());
 
     Ref<PlayFabResult> get_last_error() const;
     void set_last_error(const Ref<PlayFabResult> &p_result);

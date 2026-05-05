@@ -17,27 +17,32 @@ how to use the GDK addon:
 | `sample/gdk_demo/` | Baseline runtime/users/achievements/presence/social demo and headless test suite |
 | `sample/gdk_launch_point/` | GDK Launch Point scenario shell with grouped actions and event log |
 | `sample/multiplayer_pong/` | Multiplayer pong with Xbox identity, single player AI, and visual effects |
+| `sample/playfab_demo/` | PlayFab smoke test that still depends on the GDK runtime/bootstrap/user flow |
 
-All samples share the same GDK addon setup: `gdk_bootstrap.gd` autoload,
-`plugin.cfg` editor plugin, and addon DLLs synced by the CMake build system.
+All samples now share the same addon-owned GDK bootstrap path,
+`res://addons/godot_gdk/runtime/gdk_bootstrap.gd`, alongside the
+`plugin.cfg` editor plugin and the addon files synced by the CMake build
+system.
 
 ## Autoload bootstrap
 
-Each sample's `project.godot` autoloads its own copy of `gdk_bootstrap.gd`.
+Each sample's `project.godot` autoloads the addon-owned `GDKBootstrap`
+singleton from `addons\godot_gdk\runtime\gdk_bootstrap.gd`.
 
-The `gdk_demo` bootstrap currently:
+The shared bootstrap always loads the extension, skips the repo's headless test
+runner, and reads the startup policy from Project Settings:
 
-1. skips itself during the headless test run
-2. connects to root and users signals
-3. calls `GDK.initialize()`
-4. starts `GDK.users.add_default_user_async()` when initialization succeeds
-5. relies on native auto-dispatch with `gdk/runtime/embed_dispatch=true`
-6. shuts the runtime down when leaving the tree
+| Sample | `gdk/runtime/initialize_on_startup` | `gdk/runtime/auto_add_primary_user` | Role |
+|--------|-------------------------------------|--------------------------------------|------|
+| `gdk_demo` | `true` | `true` | Baseline demo starts the runtime and silent sign-in automatically. |
+| `gdk_launch_point` | `false` | `false` | Launch Point stays manual so the scenario shell can drive runtime actions explicitly. |
+| `multiplayer_pong` | `true` | `true` | Pong wants Xbox identity ready for the lobby flow. |
+| `playfab_demo` | `true` | `true` | PlayFab demo still depends on GDK runtime startup and silent sign-in before PlayFab calls. |
 
-That means the GDK demo sample expects native auto-dispatch to stay enabled and
-does not provide a manual pump path in the sample code.
-
-`sample\gdk_launch_point\gdk_bootstrap.gd` also autoloads in the GDK Launch Point sample, but that bootstrap only keeps the extension loaded while the shell drives runtime scenarios. The sample projects set `gdk/runtime/embed_dispatch=true` explicitly in `project.godot` and do not expose manual dispatch UI.
+All samples still set `gdk/runtime/embed_dispatch=true`. The demo-style samples
+therefore expect native auto-dispatch to stay enabled and do not provide a
+manual pump path in their gameplay scripts, while Launch Point keeps runtime
+startup under explicit scenario control.
 
 ## Demo scenes
 

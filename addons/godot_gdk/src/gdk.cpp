@@ -1,7 +1,5 @@
 #include "gdk.h"
 
-#include "gdk_async_op.h"
-#include "gdk_dispatch_op.h"
 #include "gdk_multiplayer_activity.h"
 #include "gdk_result.h"
 #include "gdk_runtime.h"
@@ -217,14 +215,6 @@ GDKRuntime *GDK::get_runtime() const {
 
 GDKXboxServices *GDK::get_xbox_services() const {
     return m_xbox_services;
-}
-
-Ref<GDKAsyncOp> GDK::make_async_error_op(HRESULT p_hresult, const String &p_code, const String &p_message, const Variant &p_data) const {
-    return m_runtime->make_error_async_op(p_hresult, p_code, p_message, p_data);
-}
-
-Ref<GDKDispatchOp> GDK::make_dispatch_error_op(HRESULT p_hresult, const String &p_code, const String &p_message, const Variant &p_data) const {
-    return m_runtime->make_error_dispatch_op(p_hresult, p_code, p_message, p_data);
 }
 
 void GDK::emit_runtime_error(const Ref<GDKResult> &p_result) {

@@ -1,6 +1,6 @@
 ---
 description: Godot GDK addon architecture, async model, script conventions, and sample workflow
-applyTo: "addons/godot_gdk/**, sample/gdk_demo/addons/godot_gdk/**, sample/gdk_demo/gdk_bootstrap.gd, sample/gdk_demo/main.gd, sample/gdk_demo/main.tscn, sample/gdk_demo/MicrosoftGame.config, sample/gdk_demo/project.godot, sample/gdk_demo/sample_config.cfg.template, sample/gdk_demo/tests/**, docs/godot-gdk-*.md, spec/gdext-gdk.md, tools/setup_sample.ps1"
+applyTo: "addons/godot_gdk/**, sample/gdk_demo/addons/godot_gdk/**, sample/gdk_demo/main.gd, sample/gdk_demo/main.tscn, sample/gdk_demo/MicrosoftGame.config, sample/gdk_demo/project.godot, sample/gdk_demo/sample_config.cfg.template, sample/gdk_demo/tests/**, sample/gdk_launch_point/project.godot, sample/multiplayer_pong/project.godot, sample/playfab_demo/project.godot, docs/godot-gdk-*.md, spec/gdext-gdk.md, tools/setup_sample.ps1"
 ---
 
 # Godot GDK Addon Instructions
@@ -9,7 +9,7 @@ applyTo: "addons/godot_gdk/**, sample/gdk_demo/addons/godot_gdk/**, sample/gdk_d
 
 - `GDK` is the only engine singleton registered by the addon.
 - Service surfaces such as `GDK.users` and `GDK.achievements` are `RefCounted` objects returned from the root singleton, not separate engine singletons.
-- Script-visible wrapper types such as `GDKUser`, `GDKAchievement`, `GDKResult`, `GDKAsyncOp`, and `GDKDispatchOp` are part of the public Godot-facing contract.
+- Script-visible wrapper types such as `GDKUser`, `GDKAchievement`, and `GDKResult` are part of the public Godot-facing contract.
 - When adding new feature areas, prefer adding a service namespace under `GDK` instead of introducing new global singleton names.
 
 ## Async Model
@@ -19,17 +19,17 @@ applyTo: "addons/godot_gdk/**, sample/gdk_demo/addons/godot_gdk/**, sample/gdk_d
   - `Manual` completion dispatch
 - `gdk/runtime/embed_dispatch` defaults to `true`. On Godot 4.5+ builds, the addon auto-pumps `GDK.dispatch()` from Godot's main thread each process frame via the engine frame callback path.
 - On Godot 4.3/4.4 builds, auto-pumping is not available through `embed_dispatch`; games, samples, and tests must keep calling `GDK.dispatch()` manually each frame. Manual pumping is also the required path whenever `embed_dispatch` is disabled or deterministic control is needed. This pump still covers both `XAsync` completions and manager-driven state.
-- Use `GDKAsyncOp` only for true `XAsyncBlock`-backed requests.
-- Use `GDKDispatchOp` for manager/event-driven one-shot waits such as Achievements Manager and future Social Manager flows.
-- Immediate failures should still return an already-completed op of the appropriate type.
-- Update service caches and emit service signals before completing the one-shot op.
+- One-shot public APIs return completion `Signal` values that callers await directly.
+- Use `GDKPendingSignal` as the internal one-shot request helper for both `XAsyncBlock`-backed work and manager/event-driven waits.
+- Immediate failures should still return an already-completed completion signal of the appropriate type.
+- Update service caches and emit service signals before resolving the one-shot completion signal.
 
 ## XAsync Wrapping Rules
 
-- `GDKXAsyncContext` owns shared mechanics only: queue binding, lifetime, and best-effort cancellation plumbing.
+- `GDKSignalXAsyncContext` owns shared mechanics only: queue binding, lifetime, and best-effort cancellation plumbing.
 - Do **not** treat `XAsyncGetStatus()` as a generic result-decoding layer.
 - Concrete finalizers must call the operation-specific `*Result()` / `*ResultSize()` APIs required by the native GDK function.
-- Keep result extraction in the concrete wrapper instead of pushing API-specific decoding into `GDKXAsyncContext`.
+- Keep result extraction in the concrete wrapper instead of pushing API-specific decoding into `GDKSignalXAsyncContext`.
 
 ## Xbox Services Scaffolding
 

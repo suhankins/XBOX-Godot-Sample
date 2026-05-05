@@ -2,8 +2,7 @@
 
 #include <algorithm>
 
-#include "gdk_async_op.h"
-#include "gdk_dispatch_op.h"
+#include "gdk_pending_signal.h"
 #include "gdk_result.h"
 
 namespace godot {
@@ -55,10 +54,10 @@ void GDKRuntime::shutdown() {
 
     m_shutting_down = true;
 
-    std::vector<Ref<GDKAsyncOp>> active_ops = m_active_ops;
-    for (const Ref<GDKAsyncOp> &op : active_ops) {
-        if (op.is_valid()) {
-            op->cancel();
+    std::vector<Ref<GDKPendingSignal>> active_pending_signals = m_active_pending_signals;
+    for (const Ref<GDKPendingSignal> &pending_signal : active_pending_signals) {
+        if (pending_signal.is_valid()) {
+            pending_signal->cancel();
         }
     }
 
@@ -75,13 +74,13 @@ void GDKRuntime::shutdown() {
         m_task_queue = nullptr;
     }
 
-    for (Ref<GDKAsyncOp> &op : m_active_ops) {
-        if (op.is_valid()) {
-            op->clear_cancel_handler();
-            op->clear_release_handler();
+    for (Ref<GDKPendingSignal> &pending_signal : m_active_pending_signals) {
+        if (pending_signal.is_valid()) {
+            pending_signal->clear_cancel_handler();
+            pending_signal->clear_release_handler();
         }
     }
-    m_active_ops.clear();
+    m_active_pending_signals.clear();
 
     XGameRuntimeUninitialize();
 
@@ -119,52 +118,41 @@ XTaskQueueHandle GDKRuntime::get_task_queue() const {
     return m_task_queue;
 }
 
-void GDKRuntime::retain_op(const Ref<GDKAsyncOp> &p_op) {
-    if (!p_op.is_valid() || p_op->is_done()) {
+void GDKRuntime::retain_pending_signal(const Ref<GDKPendingSignal> &p_pending_signal) {
+    if (!p_pending_signal.is_valid() || p_pending_signal->is_done()) {
         return;
     }
 
-    p_op->set_release_handler([this](GDKAsyncOp *p_completed_op) {
-        release_op(p_completed_op);
+    p_pending_signal->set_release_handler([this](GDKPendingSignal *p_completed_signal) {
+        release_pending_signal(p_completed_signal);
     });
-    m_active_ops.push_back(p_op);
+    m_active_pending_signals.push_back(p_pending_signal);
 }
 
-void GDKRuntime::release_op(GDKAsyncOp *p_op) {
-    m_active_ops.erase(
+void GDKRuntime::release_pending_signal(GDKPendingSignal *p_pending_signal) {
+    m_active_pending_signals.erase(
         std::remove_if(
-            m_active_ops.begin(),
-            m_active_ops.end(),
-            [p_op](const Ref<GDKAsyncOp> &candidate) {
-                return candidate.is_null() || candidate.operator->() == p_op;
+            m_active_pending_signals.begin(),
+            m_active_pending_signals.end(),
+            [p_pending_signal](const Ref<GDKPendingSignal> &candidate) {
+                return candidate.is_null() || candidate.operator->() == p_pending_signal;
             }),
-        m_active_ops.end());
+        m_active_pending_signals.end());
 }
 
-Ref<GDKAsyncOp> GDKRuntime::make_completed_async_op(const Ref<GDKResult> &p_result) {
-    Ref<GDKAsyncOp> op;
-    op.instantiate();
-    op->complete(p_result);
-    return op;
+Ref<GDKPendingSignal> GDKRuntime::make_pending_signal() {
+    Ref<GDKPendingSignal> pending_signal;
+    pending_signal.instantiate();
+    retain_pending_signal(pending_signal);
+    return pending_signal;
 }
 
-Ref<GDKAsyncOp> GDKRuntime::make_error_async_op(HRESULT p_hresult, const String &p_code, const String &p_message, const Variant &p_data) {
+Signal GDKRuntime::make_error_signal(HRESULT p_hresult, const String &p_code, const String &p_message, const Variant &p_data) {
+    Ref<GDKPendingSignal> pending_signal = make_pending_signal();
     Ref<GDKResult> result = GDKResult::error_result(p_hresult, p_code, p_message, p_data);
     set_last_error(result);
-    return make_completed_async_op(result);
-}
-
-Ref<GDKDispatchOp> GDKRuntime::make_completed_dispatch_op(const Ref<GDKResult> &p_result) {
-    Ref<GDKDispatchOp> op;
-    op.instantiate();
-    op->complete(p_result);
-    return op;
-}
-
-Ref<GDKDispatchOp> GDKRuntime::make_error_dispatch_op(HRESULT p_hresult, const String &p_code, const String &p_message, const Variant &p_data) {
-    Ref<GDKResult> result = GDKResult::error_result(p_hresult, p_code, p_message, p_data);
-    set_last_error(result);
-    return make_completed_dispatch_op(result);
+    pending_signal->complete_deferred(result);
+    return pending_signal->get_completed_signal();
 }
 
 Ref<GDKResult> GDKRuntime::get_last_error() const {

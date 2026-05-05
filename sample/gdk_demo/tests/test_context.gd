@@ -113,23 +113,48 @@ func get_embed_dispatch_enabled() -> bool:
 func set_embed_dispatch_enabled(enabled: bool) -> void:
 	ProjectSettings.set_setting(EMBED_DISPATCH_SETTING, enabled)
 
-func wait_for_op(op, timeout_msec: int = DEFAULT_ASYNC_TIMEOUT_MSEC):
-	if op == null:
-		return null
+func get_setting_default(setting_name: String):
+	if ProjectSettings.property_can_revert(setting_name):
+		return ProjectSettings.property_get_revert(setting_name)
+	return null
 
+func track_signal(async_signal) -> Dictionary:
+	var state := {
+		"completed": false,
+		"result": null
+	}
+	if typeof(async_signal) != TYPE_SIGNAL:
+		return state
+	async_signal.connect(
+		func(result):
+			state["completed"] = true
+			state["result"] = result,
+		CONNECT_ONE_SHOT)
+	return state
+
+func wait_for_tracked_signal(state: Dictionary, timeout_msec: int = DEFAULT_ASYNC_TIMEOUT_MSEC):
 	var gdk = get_gdk()
+	var main_loop = Engine.get_main_loop()
 	var started_msec = Time.get_ticks_msec()
-	while not op.is_done():
+	while not bool(state.get("completed", false)):
 		if gdk != null:
 			gdk.dispatch()
 		if Time.get_ticks_msec() - started_msec >= timeout_msec:
 			return null
-		OS.delay_msec(ASYNC_POLL_INTERVAL_MSEC)
+		if main_loop != null and main_loop.has_signal("process_frame"):
+			await main_loop.process_frame
+		else:
+			OS.delay_msec(ASYNC_POLL_INTERVAL_MSEC)
 
 	if gdk != null:
 		gdk.dispatch()
 
-	return op.get_result()
+	return state.get("result")
+
+func wait_for_signal(async_signal, timeout_msec: int = DEFAULT_ASYNC_TIMEOUT_MSEC):
+	if typeof(async_signal) != TYPE_SIGNAL:
+		return null
+	return await wait_for_tracked_signal(track_signal(async_signal), timeout_msec)
 
 func advance_process_frames(frame_count: int) -> bool:
 	var main_loop = Engine.get_main_loop()
@@ -141,25 +166,28 @@ func advance_process_frames(frame_count: int) -> bool:
 
 	return true
 
-func wait_for_op_without_manual_dispatch(op, timeout_msec: int = DEFAULT_ASYNC_TIMEOUT_MSEC):
-	if op == null:
-		return null
-
+func wait_for_tracked_signal_without_manual_dispatch(state: Dictionary, timeout_msec: int = DEFAULT_ASYNC_TIMEOUT_MSEC):
 	var main_loop = Engine.get_main_loop()
 	if main_loop == null or not main_loop.has_signal("process_frame"):
 		return null
 
 	var started_msec = Time.get_ticks_msec()
-	while not op.is_done():
+	while not bool(state.get("completed", false)):
 		if Time.get_ticks_msec() - started_msec >= timeout_msec:
 			return null
 		await main_loop.process_frame
 
-	return op.get_result()
+	return state.get("result")
+
+func wait_for_signal_without_manual_dispatch(async_signal, timeout_msec: int = DEFAULT_ASYNC_TIMEOUT_MSEC):
+	if typeof(async_signal) != TYPE_SIGNAL:
+		return null
+	return await wait_for_tracked_signal_without_manual_dispatch(track_signal(async_signal), timeout_msec)
 
 func ensure_primary_user(timeout_msec: int = DEFAULT_ASYNC_TIMEOUT_MSEC) -> Dictionary:
 	var outcome = {
 		"had_existing_user": false,
+		"signal": null,
 		"op": null,
 		"result": null,
 		"user": null
@@ -179,12 +207,13 @@ func ensure_primary_user(timeout_msec: int = DEFAULT_ASYNC_TIMEOUT_MSEC) -> Dict
 		outcome["user"] = primary_user
 		return outcome
 
-	var op = users.add_default_user_async()
-	outcome["op"] = op
-	if op == null:
+	var completion_signal = users.add_default_user_async()
+	outcome["signal"] = completion_signal
+	outcome["op"] = completion_signal
+	if typeof(completion_signal) != TYPE_SIGNAL:
 		return outcome
 
-	var result = wait_for_op(op, timeout_msec)
+	var result = await wait_for_signal(completion_signal, timeout_msec)
 	outcome["result"] = result
 	if result != null and result.ok and result.data != null:
 		outcome["user"] = result.data
@@ -201,6 +230,12 @@ func assert_result_error(result, expected_code: String, name: String) -> void:
 	assert_eq(result.ok, false, "%s result.ok == false" % name)
 	assert_eq(result.code, expected_code, "%s error code" % name)
 	assert_true(result.message.length() > 0, "%s error message present" % name)
+
+func assert_signal_result_error(async_signal, expected_code: String, name: String, timeout_msec: int = DEFAULT_ASYNC_TIMEOUT_MSEC) -> void:
+	assert_true(typeof(async_signal) == TYPE_SIGNAL, "%s returns completion Signal" % name)
+	if typeof(async_signal) != TYPE_SIGNAL:
+		return
+	assert_result_error(await wait_for_signal(async_signal, timeout_msec), expected_code, name)
 
 func assert_dict_has_key(dictionary: Dictionary, key: String, name: String) -> void:
 	assert_true(dictionary.has(key), name)

@@ -10,7 +10,7 @@
 	</tutorials>
 	<methods>
 		<method name="set_activity_async">
-			<return type="GDKAsyncOp" />
+			<return type="Signal" />
 			<param index="0" name="user" type="GDKUser" />
 			<param index="1" name="connection_string" type="String" />
 			<param index="2" name="join_restriction" type="String" default="&quot;followed&quot;" />
@@ -19,11 +19,11 @@
 			<param index="5" name="group_id" type="String" default="&quot;&quot;" />
 			<param index="6" name="allow_cross_platform_join" type="bool" default="false" />
 			<description>
-				Sets the multiplayer activity for the given local user. Returns a [GDKAsyncOp] that completes when the operation finishes.
+				Sets the multiplayer activity for the given local user. Await the returned completion [Signal] to receive the final [GDKResult].
 			</description>
 		</method>
 		<method name="get_activities_async">
-			<return type="GDKAsyncOp" />
+			<return type="Signal" />
 			<param index="0" name="user" type="GDKUser" />
 			<param index="1" name="xuids" type="PackedStringArray" />
 			<description>
@@ -38,14 +38,14 @@
 			</description>
 		</method>
 		<method name="delete_activity_async">
-			<return type="GDKAsyncOp" />
+			<return type="Signal" />
 			<param index="0" name="user" type="GDKUser" />
 			<description>
 				Deletes the multiplayer activity for the given local user.
 			</description>
 		</method>
 		<method name="send_invites_async">
-			<return type="GDKAsyncOp" />
+			<return type="Signal" />
 			<param index="0" name="user" type="GDKUser" />
 			<param index="1" name="xuids" type="PackedStringArray" />
 			<param index="2" name="allow_cross_platform_join" type="bool" default="true" />
@@ -55,7 +55,7 @@
 			</description>
 		</method>
 		<method name="show_invite_ui_async">
-			<return type="GDKAsyncOp" />
+			<return type="Signal" />
 			<param index="0" name="user" type="GDKUser" />
 			<description>
 				Shows the system invite UI for the given local user.
@@ -71,7 +71,7 @@
 			</description>
 		</method>
 		<method name="flush_recent_players_async">
-			<return type="GDKAsyncOp" />
+			<return type="Signal" />
 			<param index="0" name="user" type="GDKUser" />
 			<description>
 				Flushes the recent players batch to the Xbox service.

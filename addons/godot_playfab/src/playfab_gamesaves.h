@@ -9,7 +9,7 @@
 namespace godot {
 
 class PlayFab;
-class PlayFabAsyncOp;
+class PlayFabPendingSignal;
 class PlayFabResult;
 class PlayFabRuntime;
 class PlayFabUser;
@@ -35,10 +35,10 @@ protected:
 public:
     void set_owner(PlayFab *p_owner);
 
-    Ref<PlayFabAsyncOp> add_user_with_ui_async(const Ref<PlayFabUser> &p_user, int64_t p_options = 0);
-    Ref<PlayFabAsyncOp> upload_with_ui_async(const Ref<PlayFabUser> &p_user, bool p_release_device_as_active = false);
-    Ref<PlayFabAsyncOp> set_save_description_async(const Ref<PlayFabUser> &p_user, const String &p_short_save_description);
-    Ref<PlayFabAsyncOp> reset_cloud_async(const Ref<PlayFabUser> &p_user);
+    Signal add_user_with_ui_async(const Ref<PlayFabUser> &p_user, int64_t p_options = 0);
+    Signal upload_with_ui_async(const Ref<PlayFabUser> &p_user, bool p_release_device_as_active = false);
+    Signal set_save_description_async(const Ref<PlayFabUser> &p_user, const String &p_short_save_description);
+    Signal reset_cloud_async(const Ref<PlayFabUser> &p_user);
 
     Ref<PlayFabResult> get_folder(const Ref<PlayFabUser> &p_user) const;
     Ref<PlayFabResult> get_folder_size(const Ref<PlayFabUser> &p_user) const;

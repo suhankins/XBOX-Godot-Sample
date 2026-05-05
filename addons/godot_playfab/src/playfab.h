@@ -9,12 +9,11 @@
 #include <godot_cpp/classes/object.hpp>
 #include <godot_cpp/classes/ref.hpp>
 #include <godot_cpp/core/class_db.hpp>
-#include <godot_cpp/variant/string.hpp>
 #include <godot_cpp/variant/variant.hpp>
+#include <godot_cpp/variant/string.hpp>
 
 namespace godot {
 
-class PlayFabAsyncOp;
 class PlayFabGameSaves;
 class PlayFabLeaderboards;
 class PlayFabResult;
@@ -50,7 +49,7 @@ public:
     Ref<PlayFabUsers> get_users() const;
     Ref<PlayFabGameSaves> get_game_saves() const;
     Ref<PlayFabLeaderboards> get_leaderboards() const;
-    Ref<PlayFabAsyncOp> sign_in_async(const Variant &p_user_or_local_id, bool p_create_account = true);
+    Signal sign_in_async(const Variant &p_user_or_local_id, bool p_create_account = true);
     Ref<PlayFabUser> get_user_by_local_id(int64_t p_local_id) const;
     String get_title_id() const;
     String get_endpoint() const;

@@ -90,11 +90,11 @@ func run(context) -> void:
 		context.log_skip("Social runtime behavior", init_result.message)
 		return
 
-	var sign_in = context.ensure_primary_user()
-	var sign_in_op = sign_in["op"]
+	var sign_in = await context.ensure_primary_user()
+	var sign_in_signal = sign_in["signal"]
 	var sign_in_result = sign_in["result"]
 	var user = sign_in["user"]
-	if sign_in_op != null and sign_in_result == null:
+	if typeof(sign_in_signal) == TYPE_SIGNAL and sign_in_result == null:
 		context.log_fail("Default-user flow for social completes", "timed out waiting for a signed-in user")
 		context.reset_runtime()
 		return
@@ -119,13 +119,11 @@ func run(context) -> void:
 		return
 
 	if start_result.ok:
-		var friends_op = social.get_friends_async(user)
-		context.assert_not_null(friends_op, "get_friends_async() returns GDKAsyncOp for a signed-in user")
-		if friends_op != null:
-			context.assert_object_is(friends_op, "GDKAsyncOp", "get_friends_async() uses async op surface")
-			var friends_result = context.wait_for_op(friends_op, 8000)
+		var friends_signal = social.get_friends_async(user)
+		context.assert_true(typeof(friends_signal) == TYPE_SIGNAL, "get_friends_async() returns completion Signal")
+		if typeof(friends_signal) == TYPE_SIGNAL:
+			var friends_result = await context.wait_for_signal(friends_signal, 8000)
 			if friends_result == null:
-				friends_op.cancel()
 				context.log_skip("get_friends_async()", "Timed out waiting for the friends group to finish loading.")
 				social.stop_social_graph(user)
 				context.disconnect_signal_handlers(gdk, ["runtime_error"])

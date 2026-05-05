@@ -5,7 +5,7 @@
 #include <cstdlib>
 
 #include "gdk.h"
-#include "gdk_dispatch_op.h"
+#include "gdk_pending_signal.h"
 #include "gdk_result.h"
 #include "gdk_runtime.h"
 #include "gdk_user.h"
@@ -176,24 +176,26 @@ GDKXboxServices *GDKAchievements::_get_xbox_services() const {
     return m_owner != nullptr ? m_owner->get_xbox_services() : nullptr;
 }
 
-Ref<GDKDispatchOp> GDKAchievements::_make_completed_dispatch_op(const Ref<GDKResult> &p_result) const {
+Signal GDKAchievements::_make_completed_signal(const Ref<GDKResult> &p_result) const {
     GDKRuntime *runtime = _get_runtime();
-    if (runtime != nullptr) {
-        return runtime->make_completed_dispatch_op(p_result);
+    Ref<GDKPendingSignal> pending_signal = runtime != nullptr ? runtime->make_pending_signal() : Ref<GDKPendingSignal>();
+    if (pending_signal.is_null()) {
+        pending_signal.instantiate();
     }
-
-    Ref<GDKDispatchOp> op;
-    op.instantiate();
-    op->complete(p_result);
-    return op;
+    pending_signal->complete_deferred(p_result);
+    return pending_signal->get_completed_signal();
 }
 
-Ref<GDKDispatchOp> GDKAchievements::_make_error_dispatch_op(HRESULT p_hresult, const String &p_code, const String &p_message) const {
-    if (m_owner != nullptr) {
-        return m_owner->make_dispatch_error_op(p_hresult, p_code, p_message);
+Signal GDKAchievements::_make_error_signal(HRESULT p_hresult, const String &p_code, const String &p_message) const {
+    GDKRuntime *runtime = _get_runtime();
+    if (runtime != nullptr) {
+        return runtime->make_error_signal(p_hresult, p_code, p_message);
     }
 
-    return _make_completed_dispatch_op(GDKResult::error_result(p_hresult, p_code, p_message));
+    Ref<GDKPendingSignal> pending_signal;
+    pending_signal.instantiate();
+    pending_signal->complete_deferred(GDKResult::error_result(p_hresult, p_code, p_message));
+    return pending_signal->get_completed_signal();
 }
 
 GDKAchievements::UserState *GDKAchievements::_find_user_state_by_xuid(uint64_t p_xbox_user_id) {
@@ -390,8 +392,8 @@ void GDKAchievements::_complete_pending_queries(UserState &p_state) {
                     return false;
                 }
 
-                if (pending_query.op.is_valid()) {
-                    pending_query.op->complete(result);
+                if (pending_query.request.is_valid()) {
+                    pending_query.request->complete(result);
                 }
                 return true;
             }),
@@ -413,8 +415,8 @@ void GDKAchievements::_fail_pending_queries(uint64_t p_xbox_user_id, const Ref<G
                     return false;
                 }
 
-                if (pending_query.op.is_valid()) {
-                    pending_query.op->complete(p_result);
+                if (pending_query.request.is_valid()) {
+                    pending_query.request->complete(p_result);
                 }
                 return true;
             }),
@@ -449,8 +451,8 @@ void GDKAchievements::_complete_pending_updates(UserState &p_state, const String
                     return false;
                 }
 
-                if (pending_update.op.is_valid()) {
-                    pending_update.op->complete(result);
+                if (pending_update.request.is_valid()) {
+                    pending_update.request->complete(result);
                 }
                 return true;
             }),
@@ -472,49 +474,59 @@ void GDKAchievements::_fail_pending_updates(uint64_t p_xbox_user_id, const Ref<G
                     return false;
                 }
 
-                if (pending_update.op.is_valid()) {
-                    pending_update.op->complete(p_result);
+                if (pending_update.request.is_valid()) {
+                    pending_update.request->complete(p_result);
                 }
                 return true;
             }),
         m_pending_update_ops.end());
 }
 
-void GDKAchievements::_cancel_pending_query_op(GDKDispatchOp *p_op) {
-    if (p_op == nullptr) {
+void GDKAchievements::_cancel_pending_query_signal(GDKPendingSignal *p_request) {
+    if (p_request == nullptr) {
         return;
     }
 
-    m_pending_query_ops.erase(
-        std::remove_if(
-            m_pending_query_ops.begin(),
-            m_pending_query_ops.end(),
-            [p_op](const PendingQueryOp &pending_query) {
-                return pending_query.op.is_null() || pending_query.op.operator->() == p_op;
-            }),
-        m_pending_query_ops.end());
+    for (auto it = m_pending_query_ops.begin(); it != m_pending_query_ops.end(); ++it) {
+        if (it->request.is_null() || it->request.ptr() != p_request) {
+            continue;
+        }
+
+        Ref<GDKPendingSignal> pending_signal = it->request;
+        m_pending_query_ops.erase(it);
+        if (pending_signal.is_valid()) {
+            pending_signal->clear_cancel_handler();
+            pending_signal->complete(GDKResult::cancelled("Achievement query cancelled."));
+        }
+        return;
+    }
 }
 
-void GDKAchievements::_cancel_pending_update_op(GDKDispatchOp *p_op) {
-    if (p_op == nullptr) {
+void GDKAchievements::_cancel_pending_update_signal(GDKPendingSignal *p_request) {
+    if (p_request == nullptr) {
         return;
     }
 
-    m_pending_update_ops.erase(
-        std::remove_if(
-            m_pending_update_ops.begin(),
-            m_pending_update_ops.end(),
-            [p_op](const PendingUpdateOp &pending_update) {
-                return pending_update.op.is_null() || pending_update.op.operator->() == p_op;
-            }),
-        m_pending_update_ops.end());
+    for (auto it = m_pending_update_ops.begin(); it != m_pending_update_ops.end(); ++it) {
+        if (it->request.is_null() || it->request.ptr() != p_request) {
+            continue;
+        }
+
+        Ref<GDKPendingSignal> pending_signal = it->request;
+        m_pending_update_ops.erase(it);
+        if (pending_signal.is_valid()) {
+            pending_signal->clear_cancel_handler();
+            pending_signal->complete(GDKResult::cancelled("Achievement update cancelled."));
+        }
+        return;
+    }
 }
 
 void GDKAchievements::_submit_waiting_updates(UserState &p_state) {
     GDKRuntime *runtime = _get_runtime();
 
     for (PendingUpdateOp &pending_update : m_pending_update_ops) {
-        if (pending_update.xbox_user_id != p_state.xbox_user_id || pending_update.submitted || !pending_update.op.is_valid()) {
+        if (pending_update.xbox_user_id != p_state.xbox_user_id || pending_update.submitted || !pending_update.request.is_valid()) {
             continue;
         }
 
@@ -523,7 +535,7 @@ void GDKAchievements::_submit_waiting_updates(UserState &p_state) {
             if (runtime != nullptr) {
                 runtime->set_last_error(submit_result);
             }
-            pending_update.op->complete(submit_result);
+            pending_update.request->complete(submit_result);
         }
     }
 
@@ -536,7 +548,7 @@ void GDKAchievements::_erase_completed_updates() {
             m_pending_update_ops.begin(),
             m_pending_update_ops.end(),
             [](const PendingUpdateOp &pending_update) {
-                return pending_update.op.is_null() || pending_update.op->is_done();
+                return pending_update.request.is_null() || pending_update.request->is_done();
             }),
         m_pending_update_ops.end());
 }
@@ -658,11 +670,11 @@ int GDKAchievements::dispatch() {
     return handled_events;
 }
 
-Ref<GDKDispatchOp> GDKAchievements::query_player_achievements_async(const Ref<GDKUser> &p_user) {
+Signal GDKAchievements::query_player_achievements_async(const Ref<GDKUser> &p_user) {
     UserState *state = nullptr;
     Ref<GDKResult> ensure_result = _ensure_user_state(p_user, &state);
     if (!ensure_result->is_ok()) {
-        return _make_error_dispatch_op(
+        return _make_error_signal(
             static_cast<HRESULT>(ensure_result->get_hresult()),
             ensure_result->get_code(),
             ensure_result->get_message());
@@ -671,66 +683,56 @@ Ref<GDKDispatchOp> GDKAchievements::query_player_achievements_async(const Ref<GD
     if (state->initialized) {
         Ref<GDKResult> refresh_result = _refresh_user_cache(*state);
         if (!refresh_result->is_ok()) {
-            return _make_error_dispatch_op(
+            return _make_error_signal(
                 static_cast<HRESULT>(refresh_result->get_hresult()),
                 refresh_result->get_code(),
                 refresh_result->get_message());
         }
-        return _make_completed_dispatch_op(refresh_result);
+        return _make_completed_signal(refresh_result);
     }
-
-    Ref<GDKDispatchOp> op;
-    op.instantiate();
 
     GDKRuntime *runtime = _get_runtime();
-    if (runtime != nullptr) {
-        Ref<GDKAsyncOp> retained_op = op;
-        runtime->retain_op(retained_op);
-    }
+    Ref<GDKPendingSignal> pending_signal = runtime != nullptr ? runtime->make_pending_signal() : Ref<GDKPendingSignal>();
+    ERR_FAIL_COND_V(pending_signal.is_null(), Signal());
 
     PendingQueryOp pending_query;
     pending_query.xbox_user_id = state->xbox_user_id;
-    pending_query.op = op;
+    pending_query.request = pending_signal;
     m_pending_query_ops.push_back(pending_query);
-    GDKDispatchOp *op_ptr = op.ptr();
-    op->set_cancel_message("Achievement query cancelled.");
-    op->set_cancel_handler([this, op_ptr]() {
-        _cancel_pending_query_op(op_ptr);
+    GDKPendingSignal *pending_signal_ptr = pending_signal.ptr();
+    pending_signal->set_cancel_handler([this, pending_signal_ptr]() {
+        _cancel_pending_query_signal(pending_signal_ptr);
     });
 
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
-Ref<GDKDispatchOp> GDKAchievements::update_achievement_async(const Ref<GDKUser> &p_user, const String &p_achievement_id, int64_t p_percent_complete) {
+Signal GDKAchievements::update_achievement_async(const Ref<GDKUser> &p_user, const String &p_achievement_id, int64_t p_percent_complete) {
     UserState *state = nullptr;
     Ref<GDKResult> ensure_result = _ensure_user_state(p_user, &state);
     if (!ensure_result->is_ok()) {
-        return _make_error_dispatch_op(
+        return _make_error_signal(
             static_cast<HRESULT>(ensure_result->get_hresult()),
             ensure_result->get_code(),
             ensure_result->get_message());
     }
 
     if (p_achievement_id.is_empty()) {
-        return _make_error_dispatch_op(E_INVALIDARG, "invalid_achievement_id", "Achievement updates require a non-empty achievement id.");
+        return _make_error_signal(E_INVALIDARG, "invalid_achievement_id", "Achievement updates require a non-empty achievement id.");
     }
     if (p_percent_complete < 1 || p_percent_complete > 100) {
-        return _make_error_dispatch_op(E_INVALIDARG, "invalid_achievement_progress", "Achievement progress must be between 1 and 100.");
+        return _make_error_signal(E_INVALIDARG, "invalid_achievement_progress", "Achievement progress must be between 1 and 100.");
     }
-
-    Ref<GDKDispatchOp> op;
-    op.instantiate();
 
     PendingUpdateOp pending_update;
     pending_update.xbox_user_id = state->xbox_user_id;
     pending_update.achievement_id = p_achievement_id;
     pending_update.percent_complete = static_cast<uint32_t>(p_percent_complete);
-    pending_update.op = op;
 
     if (state->initialized) {
         Ref<GDKResult> submit_result = _submit_update(pending_update);
         if (!submit_result->is_ok()) {
-            return _make_error_dispatch_op(
+            return _make_error_signal(
                 static_cast<HRESULT>(submit_result->get_hresult()),
                 submit_result->get_code(),
                 submit_result->get_message());
@@ -738,18 +740,16 @@ Ref<GDKDispatchOp> GDKAchievements::update_achievement_async(const Ref<GDKUser> 
     }
 
     GDKRuntime *runtime = _get_runtime();
-    if (runtime != nullptr) {
-        Ref<GDKAsyncOp> retained_op = op;
-        runtime->retain_op(retained_op);
-    }
+    Ref<GDKPendingSignal> pending_signal = runtime != nullptr ? runtime->make_pending_signal() : Ref<GDKPendingSignal>();
+    ERR_FAIL_COND_V(pending_signal.is_null(), Signal());
+    pending_update.request = pending_signal;
 
     m_pending_update_ops.push_back(pending_update);
-    GDKDispatchOp *op_ptr = op.ptr();
-    op->set_cancel_message("Achievement update cancelled.");
-    op->set_cancel_handler([this, op_ptr]() {
-        _cancel_pending_update_op(op_ptr);
+    GDKPendingSignal *pending_signal_ptr = pending_signal.ptr();
+    pending_signal->set_cancel_handler([this, pending_signal_ptr]() {
+        _cancel_pending_update_signal(pending_signal_ptr);
     });
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
 Array GDKAchievements::get_cached_achievements(const Ref<GDKUser> &p_user) const {

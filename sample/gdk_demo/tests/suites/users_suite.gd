@@ -79,16 +79,16 @@ func run(context) -> void:
 	var primary_user_changed_events: Array = []
 	users.connect("user_added", func(user): user_added_events.append(user))
 	users.connect("user_removed", func(local_id): user_removed_events.append(local_id))
-	users.connect("user_changed", func(user): user_changed_events.append(user))
+	users.connect("user_changed", func(user, change_kind): user_changed_events.append({"user": user, "change_kind": change_kind}))
 	users.connect("primary_user_changed", func(user): primary_user_changed_events.append(user))
 
-	var sign_in = context.ensure_primary_user()
-	var add_op = sign_in["op"]
+	var sign_in = await context.ensure_primary_user()
+	var add_signal = sign_in["signal"]
 	var add_result = sign_in["result"]
 	var user = sign_in["user"]
-	if add_op != null:
-		context.assert_object_is(add_op, "GDKAsyncOp", "add_default_user_async() uses XAsync-backed op type")
-	if add_op != null and add_result == null:
+	if not sign_in["had_existing_user"]:
+		context.assert_true(typeof(add_signal) == TYPE_SIGNAL, "add_default_user_async() returns completion Signal")
+	if typeof(add_signal) == TYPE_SIGNAL and add_result == null:
 		context.log_fail("add_default_user_async() completes", "timed out waiting for the default user flow")
 		context.disconnect_signal_handlers(users, ["user_added", "user_removed", "user_changed", "primary_user_changed"])
 		context.reset_runtime()
@@ -137,12 +137,10 @@ func run(context) -> void:
 	context.assert_eq(user.get_sign_in_state(), context.get_class_constant("GDKUser", "SIGN_IN_STATE_SIGNED_IN"), "signed-in user reports SIGNED_IN")
 	context.assert_eq(user.is_signed_in(), true, "signed-in user reports signed_in == true")
 
-	var privilege_op = users.check_privilege_async(user, 254)
-	context.assert_not_null(privilege_op, "check_privilege_async() returns GDKAsyncOp for a signed-in user")
-	if privilege_op != null:
-		context.assert_object_is(privilege_op, "GDKAsyncOp", "check_privilege_async() uses GDKAsyncOp")
-		context.assert_true(privilege_op.is_done(), "check_privilege_async() completes immediately")
-		var privilege_result = privilege_op.get_result()
+	var privilege_signal = users.check_privilege_async(user, 254)
+	context.assert_true(typeof(privilege_signal) == TYPE_SIGNAL, "check_privilege_async() returns completion Signal for a signed-in user")
+	if typeof(privilege_signal) == TYPE_SIGNAL:
+		var privilege_result = await context.wait_for_signal(privilege_signal)
 		context.assert_not_null(privilege_result, "check_privilege_async() yields a result")
 		if privilege_result != null:
 			if privilege_result.ok:
@@ -157,15 +155,11 @@ func run(context) -> void:
 				context.assert_true(privilege_result.code.length() > 0, "privilege failure exposes an error code")
 				context.assert_true(privilege_result.message.length() > 0, "privilege failure exposes an error message")
 
-	var invalid_picture_op = users.get_gamer_picture_async(user, "giant")
-	context.assert_not_null(invalid_picture_op, "get_gamer_picture_async() returns GDKAsyncOp for a signed-in user")
-	if invalid_picture_op != null:
-		context.assert_result_error(invalid_picture_op.get_result(), "invalid_gamer_picture_size", "get_gamer_picture_async() rejects invalid sizes")
+	var invalid_picture_signal = users.get_gamer_picture_async(user, "giant")
+	await context.assert_signal_result_error(invalid_picture_signal, "invalid_gamer_picture_size", "get_gamer_picture_async() rejects invalid sizes")
 
-	var invalid_token_op = users.get_token_and_signature_async(user, "GET", " ")
-	context.assert_not_null(invalid_token_op, "get_token_and_signature_async() returns GDKAsyncOp for a signed-in user")
-	if invalid_token_op != null:
-		context.assert_result_error(invalid_token_op.get_result(), "invalid_request_url", "get_token_and_signature_async() rejects blank URLs")
+	var invalid_token_signal = users.get_token_and_signature_async(user, "GET", " ")
+	await context.assert_signal_result_error(invalid_token_signal, "invalid_request_url", "get_token_and_signature_async() rejects blank URLs")
 
 	context.disconnect_signal_handlers(users, ["user_added", "user_removed", "user_changed", "primary_user_changed"])
 	context.reset_runtime()

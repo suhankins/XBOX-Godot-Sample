@@ -8,6 +8,7 @@ extends Node
 ##    points at a `GameInputActionMap` resource — turning the action-bridge into a
 ##    zero-code, project-settings-only integration for projects that just want
 ##    "controller goes through GameInput".
+##  * Skips headless validation and sample test runs.
 ##  * Calls `GameInput.shutdown()` when the tree is being torn down.
 ##
 ## Apps that need finer control can leave the settings disabled and call the API
@@ -18,6 +19,8 @@ extends Node
 const SETTING_INITIALIZE_ON_STARTUP := "game_input/runtime/initialize_on_startup"
 const SETTING_AUTO_POLL := "game_input/runtime/auto_poll"
 const SETTING_DEFAULT_ACTION_MAP := "game_input/mapper/default_action_map"
+const GD_SCRIPT_CHECK_FLAG := "--gd-script-check"
+const TEST_SCRIPT_PATH := "res://tests/run_tests.gd"
 
 var _auto_poll: bool = false
 var _initialized_here: bool = false
@@ -25,6 +28,9 @@ var _default_mapper: Node = null
 
 
 func _ready() -> void:
+	if _should_skip_bootstrap():
+		return
+
 	if not Engine.has_singleton("GameInput"):
 		push_warning("[GameInput] Bootstrap: 'GameInput' singleton not registered. " +
 				"Is the godot_gameinput GDExtension built and loaded?")
@@ -69,6 +75,19 @@ func _notification(what: int) -> void:
 			if gi != null and gi.is_initialized():
 				gi.shutdown()
 				_initialized_here = false
+
+
+func _should_skip_bootstrap() -> bool:
+	var user_args: PackedStringArray = OS.get_cmdline_user_args()
+	if user_args.has(GD_SCRIPT_CHECK_FLAG):
+		return true
+
+	var args: PackedStringArray = OS.get_cmdline_args()
+	if args.has("--script") and args.has(TEST_SCRIPT_PATH):
+		print("[GameInput] Bootstrap skipped for headless tests")
+		return true
+
+	return false
 
 
 func _maybe_spawn_default_mapper() -> void:

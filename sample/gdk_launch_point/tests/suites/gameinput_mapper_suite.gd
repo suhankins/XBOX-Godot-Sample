@@ -25,6 +25,8 @@ func _test_mapper_construction(context) -> void:
 			"target_device_id default -1 (= primary device of mask)")
 	context.assert_true(mapper.get("target_kind_mask") is int,
 			"target_kind_mask is int")
+	if mapper != null:
+		mapper.free()
 
 
 func _test_mapper_with_action_map(context) -> void:
@@ -42,6 +44,8 @@ func _test_mapper_with_action_map(context) -> void:
 	mapper.set("action_map", null)
 	context.assert_true(mapper.get("action_map") == null,
 			"action_map can be set to null")
+	if mapper != null:
+		mapper.free()
 
 
 func _test_mapper_inert_without_device(context) -> void:

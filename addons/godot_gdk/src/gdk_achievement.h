@@ -20,8 +20,7 @@
 namespace godot {
 
 class GDK;
-class GDKAsyncOp;
-class GDKDispatchOp;
+class GDKPendingSignal;
 class GDKResult;
 class GDKRuntime;
 class GDKUser;
@@ -71,7 +70,7 @@ class GDKAchievements : public RefCounted {
 
     struct PendingQueryOp {
         uint64_t xbox_user_id = 0;
-        Ref<GDKDispatchOp> op;
+        Ref<GDKPendingSignal> request;
     };
 
     struct PendingUpdateOp {
@@ -79,7 +78,7 @@ class GDKAchievements : public RefCounted {
         String achievement_id;
         uint32_t percent_complete = 0;
         bool submitted = false;
-        Ref<GDKDispatchOp> op;
+        Ref<GDKPendingSignal> request;
     };
 
     GDK *m_owner = nullptr;
@@ -90,8 +89,8 @@ class GDKAchievements : public RefCounted {
 
     GDKRuntime *_get_runtime() const;
     GDKXboxServices *_get_xbox_services() const;
-    Ref<GDKDispatchOp> _make_completed_dispatch_op(const Ref<GDKResult> &p_result) const;
-    Ref<GDKDispatchOp> _make_error_dispatch_op(HRESULT p_hresult, const String &p_code, const String &p_message) const;
+    Signal _make_completed_signal(const Ref<GDKResult> &p_result) const;
+    Signal _make_error_signal(HRESULT p_hresult, const String &p_code, const String &p_message) const;
     UserState *_find_user_state_by_xuid(uint64_t p_xbox_user_id);
     UserState *_find_user_state_by_local_id(XUserLocalId p_local_id);
     Ref<GDKAchievement> _find_cached_achievement(const UserState &p_state, const String &p_achievement_id) const;
@@ -104,8 +103,8 @@ class GDKAchievements : public RefCounted {
     void _fail_pending_queries(uint64_t p_xbox_user_id, const Ref<GDKResult> &p_result);
     void _complete_pending_updates(UserState &p_state, const String &p_achievement_id);
     void _fail_pending_updates(uint64_t p_xbox_user_id, const Ref<GDKResult> &p_result);
-    void _cancel_pending_query_op(GDKDispatchOp *p_op);
-    void _cancel_pending_update_op(GDKDispatchOp *p_op);
+    void _cancel_pending_query_signal(GDKPendingSignal *p_request);
+    void _cancel_pending_update_signal(GDKPendingSignal *p_request);
     void _submit_waiting_updates(UserState &p_state);
     void _erase_completed_updates();
     void _erase_user_state(uint64_t p_xbox_user_id);
@@ -120,8 +119,8 @@ public:
     void shutdown();
     int dispatch();
 
-    Ref<GDKDispatchOp> query_player_achievements_async(const Ref<GDKUser> &p_user);
-    Ref<GDKDispatchOp> update_achievement_async(const Ref<GDKUser> &p_user, const String &p_achievement_id, int64_t p_percent_complete);
+    Signal query_player_achievements_async(const Ref<GDKUser> &p_user);
+    Signal update_achievement_async(const Ref<GDKUser> &p_user, const String &p_achievement_id, int64_t p_percent_complete);
     Array get_cached_achievements(const Ref<GDKUser> &p_user) const;
 
     void on_user_removed(const Ref<GDKUser> &p_user);

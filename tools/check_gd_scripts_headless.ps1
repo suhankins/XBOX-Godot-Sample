@@ -4,11 +4,11 @@
     parser.
 
 .DESCRIPTION
-    This script enumerates every .gd file tracked by git (plus untracked,
-    non-ignored files), groups them by Godot project context, and runs
-    `godot --headless --check-only --script <path>` against each one.  It
-    reports parse errors and warnings, then exits non-zero if any script fails
-    validation.
+    This script enumerates every .gd file in the current git working tree
+    (tracked plus untracked, non-ignored files), groups them by Godot project
+    context, and runs `godot --headless --check-only --script <path>` against
+    each one. It reports parse errors and warnings, then exits non-zero if any
+    script fails validation.
 
     Scripts that live inside a Godot project (a directory containing
     project.godot) are checked in-place against that project root.  Scripts
@@ -86,7 +86,8 @@ function Get-GDScriptFiles {
         $files |
             Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
             Sort-Object -Unique |
-            ForEach-Object { [System.IO.Path]::GetFullPath((Join-Path $script:RepoRoot $_)) }
+            ForEach-Object { [System.IO.Path]::GetFullPath((Join-Path $script:RepoRoot $_)) } |
+            Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }
     )
 }
 

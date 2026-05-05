@@ -24,10 +24,10 @@
 			</description>
 		</method>
 		<method name="get_friends_async">
-			<return type="GDKAsyncOp" />
+			<return type="Signal" />
 			<param index="0" name="user" type="GDKUser" />
 			<description>
-				Asynchronously retrieves the friends list for the given local user.
+				Asynchronously retrieves the friends list for the given local user. Await the returned completion [Signal] to receive a [GDKResult] whose [code]data[/code] contains the loaded [GDKSocialGroup].
 			</description>
 		</method>
 		<method name="create_social_group">

@@ -9,30 +9,30 @@
 #include <playfab/services/PFLeaderboards.h>
 
 #include "playfab.h"
-#include "playfab_async_op.h"
+#include "playfab_pending_signal.h"
 #include "playfab_result.h"
+#include "playfab_signal_xasync_context.h"
 #include "playfab_user.h"
 #include "playfab_users.h"
-#include "playfab_xasync_context.h"
 
 namespace godot {
 
 namespace {
 
-Ref<PlayFabAsyncOp> make_leaderboards_error_op(
+Signal make_leaderboards_error_signal(
         PlayFabRuntime *p_runtime,
         HRESULT p_hresult,
         const String &p_code,
         const String &p_message,
         const Variant &p_data = Variant()) {
     if (p_runtime != nullptr) {
-        return p_runtime->make_error_async_op(p_hresult, p_code, p_message, p_data);
+        return p_runtime->make_error_signal(p_hresult, p_code, p_message, p_data);
     }
 
-    Ref<PlayFabAsyncOp> op;
-    op.instantiate();
-    op->complete(PlayFabResult::error_result(p_hresult, p_code, p_message, p_data));
-    return op;
+    Ref<PlayFabPendingSignal> pending_signal;
+    pending_signal.instantiate();
+    pending_signal->complete_deferred(PlayFabResult::error_result(p_hresult, p_code, p_message, p_data));
+    return pending_signal->get_completed_signal();
 }
 
 bool validate_playfab_user(const Ref<PlayFabUser> &p_user, String *r_error_message) {
@@ -110,7 +110,7 @@ Dictionary make_leaderboard_response(const PFLeaderboardsGetEntityLeaderboardRes
 using LeaderboardResultSizeFn = HRESULT (*)(XAsyncBlock *, size_t *);
 using LeaderboardResultFn = HRESULT (*)(XAsyncBlock *, size_t, void *, PFLeaderboardsGetEntityLeaderboardResponse **, size_t *);
 
-class LeaderboardQueryContext final : public PlayFabXAsyncContext {
+class LeaderboardQueryContext final : public PlayFabSignalXAsyncContext {
 public:
     enum class Mode {
         Global,
@@ -169,10 +169,10 @@ public:
     LeaderboardQueryContext(
             Mode p_mode,
             PlayFabRuntime *p_runtime,
-            const Ref<PlayFabAsyncOp> &p_op,
+            const Ref<PlayFabPendingSignal> &p_pending_signal,
             const Ref<PlayFabUser> &p_user,
             const String &p_leaderboard_name) :
-            PlayFabXAsyncContext(p_runtime, p_op),
+            PlayFabSignalXAsyncContext(p_runtime, p_pending_signal),
             m_mode(p_mode),
             m_user(p_user),
             m_leaderboard_name_utf8(p_leaderboard_name.utf8().get_data()) {
@@ -247,10 +247,10 @@ protected:
     void finalize(XAsyncBlock *p_async_block) override {
         Ref<PlayFabResult> result;
 
-        if (get_runtime()->is_shutting_down() || get_op()->was_cancel_requested()) {
+        if (get_runtime()->is_shutting_down() || get_pending_signal()->was_cancel_requested()) {
             result = PlayFabResult::cancelled("Leaderboard request cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -258,13 +258,13 @@ protected:
         if (status_hr == E_ABORT) {
             result = PlayFabResult::cancelled("Leaderboard request cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
         if (FAILED(status_hr)) {
             result = PlayFabResult::hresult_error(status_hr, "Failed to query the PlayFab leaderboard.", "leaderboard_query_failed");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -273,7 +273,7 @@ protected:
         if (FAILED(size_hr)) {
             result = PlayFabResult::hresult_error(size_hr, "Failed to get the leaderboard result size.", "leaderboard_result_size_failed");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -288,16 +288,16 @@ protected:
         if (FAILED(result_hr)) {
             result = PlayFabResult::hresult_error(result_hr, "Failed to retrieve the leaderboard result payload.", "leaderboard_result_failed");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
         get_runtime()->clear_last_error();
-        get_op()->complete(PlayFabResult::ok_result(make_leaderboard_response(response)));
+        get_pending_signal()->complete(PlayFabResult::ok_result(make_leaderboard_response(response)));
     }
 };
 
-class UpdateLeaderboardEntriesContext final : public PlayFabXAsyncContext {
+class UpdateLeaderboardEntriesContext final : public PlayFabSignalXAsyncContext {
     Ref<PlayFabUser> m_user;
     std::string m_leaderboard_name_utf8;
     std::string m_entity_id_utf8;
@@ -311,12 +311,12 @@ class UpdateLeaderboardEntriesContext final : public PlayFabXAsyncContext {
 public:
     UpdateLeaderboardEntriesContext(
             PlayFabRuntime *p_runtime,
-            const Ref<PlayFabAsyncOp> &p_op,
+            const Ref<PlayFabPendingSignal> &p_pending_signal,
             const Ref<PlayFabUser> &p_user,
             const String &p_leaderboard_name,
             const std::vector<std::string> &p_scores,
             const String &p_metadata) :
-            PlayFabXAsyncContext(p_runtime, p_op),
+            PlayFabSignalXAsyncContext(p_runtime, p_pending_signal),
             m_user(p_user),
             m_leaderboard_name_utf8(p_leaderboard_name.utf8().get_data()),
             m_metadata_utf8(p_metadata.utf8().get_data()),
@@ -349,10 +349,10 @@ protected:
     void finalize(XAsyncBlock *p_async_block) override {
         Ref<PlayFabResult> result;
 
-        if (get_runtime()->is_shutting_down() || get_op()->was_cancel_requested()) {
+        if (get_runtime()->is_shutting_down() || get_pending_signal()->was_cancel_requested()) {
             result = PlayFabResult::cancelled("Leaderboard update cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -360,13 +360,13 @@ protected:
         if (status_hr == E_ABORT) {
             result = PlayFabResult::cancelled("Leaderboard update cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
         if (FAILED(status_hr)) {
             result = PlayFabResult::hresult_error(status_hr, "Failed to update the PlayFab leaderboard entry.", "leaderboard_update_failed");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -383,11 +383,11 @@ protected:
         data["metadata"] = String::utf8(m_metadata_utf8.c_str());
 
         get_runtime()->clear_last_error();
-        get_op()->complete(PlayFabResult::ok_result(data));
+        get_pending_signal()->complete(PlayFabResult::ok_result(data));
     }
 };
 
-class FriendLeaderboardTokenContext final : public PlayFabXAsyncContext {
+class FriendLeaderboardTokenContext final : public PlayFabSignalXAsyncContext {
     PlayFabLeaderboards *m_leaderboards = nullptr;
     Ref<PlayFabUser> m_user;
     std::string m_leaderboard_name_utf8;
@@ -398,12 +398,12 @@ public:
     FriendLeaderboardTokenContext(
             PlayFabLeaderboards *p_leaderboards,
             PlayFabRuntime *p_runtime,
-            const Ref<PlayFabAsyncOp> &p_op,
+            const Ref<PlayFabPendingSignal> &p_pending_signal,
             const Ref<PlayFabUser> &p_user,
             XUserHandle p_user_handle,
             const String &p_leaderboard_name,
             int64_t p_version) :
-            PlayFabXAsyncContext(p_runtime, p_op),
+            PlayFabSignalXAsyncContext(p_runtime, p_pending_signal),
             m_leaderboards(p_leaderboards),
             m_user(p_user),
             m_leaderboard_name_utf8(p_leaderboard_name.utf8().get_data()),
@@ -440,7 +440,7 @@ protected:
 void start_friend_query_with_token(
         PlayFabLeaderboards *p_service,
         PlayFabRuntime *p_runtime,
-        const Ref<PlayFabAsyncOp> &p_op,
+        const Ref<PlayFabPendingSignal> &p_pending_signal,
         const Ref<PlayFabUser> &p_user,
         const String &p_leaderboard_name,
         const String &p_xbox_token,
@@ -448,7 +448,7 @@ void start_friend_query_with_token(
     auto *context = new LeaderboardQueryContext(
             LeaderboardQueryContext::Mode::Friends,
             p_runtime,
-            p_op,
+            p_pending_signal,
             p_user,
             p_leaderboard_name);
     context->configure_friends(p_xbox_token, p_version, true);
@@ -456,22 +456,22 @@ void start_friend_query_with_token(
 
     HRESULT hr = context->start();
     if (FAILED(hr)) {
-        p_op->clear_cancel_handler();
+        p_pending_signal->clear_cancel_handler();
         delete context;
 
         Ref<PlayFabResult> result = PlayFabResult::hresult_error(hr, "Failed to start the friend leaderboard request.", "friend_leaderboard_start_failed");
         p_runtime->set_last_error(result);
-        p_op->complete(result);
+        p_pending_signal->complete_deferred(result);
     }
 }
 
 void FriendLeaderboardTokenContext::finalize(XAsyncBlock *p_async_block) {
     Ref<PlayFabResult> result;
 
-    if (get_runtime()->is_shutting_down() || get_op()->was_cancel_requested()) {
+    if (get_runtime()->is_shutting_down() || get_pending_signal()->was_cancel_requested()) {
         result = PlayFabResult::cancelled("Friend leaderboard token request cancelled.");
         get_runtime()->set_last_error(result);
-        get_op()->complete(result);
+        get_pending_signal()->complete(result);
         return;
     }
 
@@ -479,13 +479,13 @@ void FriendLeaderboardTokenContext::finalize(XAsyncBlock *p_async_block) {
     if (status_hr == E_ABORT) {
         result = PlayFabResult::cancelled("Friend leaderboard token request cancelled.");
         get_runtime()->set_last_error(result);
-        get_op()->complete(result);
+        get_pending_signal()->complete(result);
         return;
     }
     if (FAILED(status_hr)) {
         result = PlayFabResult::hresult_error(status_hr, "Failed to acquire an Xbox token for the friend leaderboard request.", "friend_leaderboard_token_failed");
         get_runtime()->set_last_error(result);
-        get_op()->complete(result);
+        get_pending_signal()->complete(result);
         return;
     }
 
@@ -494,7 +494,7 @@ void FriendLeaderboardTokenContext::finalize(XAsyncBlock *p_async_block) {
     if (FAILED(size_hr)) {
         result = PlayFabResult::hresult_error(size_hr, "Failed to get the Xbox token result size.", "friend_leaderboard_token_result_size_failed");
         get_runtime()->set_last_error(result);
-        get_op()->complete(result);
+        get_pending_signal()->complete(result);
         return;
     }
 
@@ -509,7 +509,7 @@ void FriendLeaderboardTokenContext::finalize(XAsyncBlock *p_async_block) {
     if (FAILED(result_hr)) {
         result = PlayFabResult::hresult_error(result_hr, "Failed to retrieve the Xbox token payload.", "friend_leaderboard_token_result_failed");
         get_runtime()->set_last_error(result);
-        get_op()->complete(result);
+        get_pending_signal()->complete(result);
         return;
     }
 
@@ -517,14 +517,14 @@ void FriendLeaderboardTokenContext::finalize(XAsyncBlock *p_async_block) {
     if (xbox_token.is_empty()) {
         result = PlayFabResult::error_result(E_FAIL, "friend_leaderboard_token_empty", "Xbox token acquisition succeeded but returned an empty token.");
         get_runtime()->set_last_error(result);
-        get_op()->complete(result);
+        get_pending_signal()->complete(result);
         return;
     }
 
     start_friend_query_with_token(
             m_leaderboards,
             get_runtime(),
-            get_op(),
+            get_pending_signal(),
             m_user,
             String::utf8(m_leaderboard_name_utf8.c_str()),
             xbox_token,
@@ -565,7 +565,7 @@ PlayFabRuntime *PlayFabLeaderboards::_get_runtime() const {
     return m_owner != nullptr ? m_owner->get_runtime() : nullptr;
 }
 
-Ref<PlayFabAsyncOp> PlayFabLeaderboards::submit_score_async(
+Signal PlayFabLeaderboards::submit_score_async(
         const Ref<PlayFabUser> &p_user,
         const String &p_leaderboard_name,
         int64_t p_score,
@@ -573,17 +573,17 @@ Ref<PlayFabAsyncOp> PlayFabLeaderboards::submit_score_async(
         const String &p_metadata) {
     PlayFabRuntime *runtime = _get_runtime();
     if (runtime == nullptr || !runtime->is_initialized()) {
-        return make_leaderboards_error_op(runtime, E_FAIL, "not_initialized", "PlayFab is not initialized. Call PlayFab.initialize() first.");
+        return make_leaderboards_error_signal(runtime, E_FAIL, "not_initialized", "PlayFab is not initialized. Call PlayFab.initialize() first.");
     }
 
     String user_error;
     if (!validate_playfab_user(p_user, &user_error)) {
-        return make_leaderboards_error_op(runtime, E_INVALIDARG, "invalid_playfab_user", user_error);
+        return make_leaderboards_error_signal(runtime, E_INVALIDARG, "invalid_playfab_user", user_error);
     }
 
     const String leaderboard_name = p_leaderboard_name.strip_edges();
     if (leaderboard_name.is_empty()) {
-        return make_leaderboards_error_op(runtime, E_INVALIDARG, "invalid_leaderboard_name", "Leaderboard operations require a non-empty leaderboard_name.");
+        return make_leaderboards_error_signal(runtime, E_INVALIDARG, "invalid_leaderboard_name", "Leaderboard operations require a non-empty leaderboard_name.");
     }
 
     std::vector<std::string> scores;
@@ -592,28 +592,25 @@ Ref<PlayFabAsyncOp> PlayFabLeaderboards::submit_score_async(
         scores.push_back(String(p_additional_scores[i]).utf8().get_data());
     }
 
-    Ref<PlayFabAsyncOp> op;
-    op.instantiate();
-    runtime->retain_op(op);
+    Ref<PlayFabPendingSignal> pending_signal = runtime->make_pending_signal();
 
-    auto *context = new UpdateLeaderboardEntriesContext(runtime, op, p_user, leaderboard_name, scores, p_metadata);
+    auto *context = new UpdateLeaderboardEntriesContext(runtime, pending_signal, p_user, leaderboard_name, scores, p_metadata);
     context->bind_cancel_handler();
 
     HRESULT hr = context->start();
     if (FAILED(hr)) {
-        op->clear_cancel_handler();
+        pending_signal->clear_cancel_handler();
         delete context;
 
         Ref<PlayFabResult> result = PlayFabResult::hresult_error(hr, "Failed to start the leaderboard update request.", "leaderboard_update_start_failed");
         runtime->set_last_error(result);
-        op->complete(result);
-        return op;
+        pending_signal->complete_deferred(result);
     }
 
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
-Ref<PlayFabAsyncOp> PlayFabLeaderboards::get_leaderboard_async(
+Signal PlayFabLeaderboards::get_leaderboard_async(
         const Ref<PlayFabUser> &p_user,
         const String &p_leaderboard_name,
         int64_t p_start_position,
@@ -621,30 +618,28 @@ Ref<PlayFabAsyncOp> PlayFabLeaderboards::get_leaderboard_async(
         int64_t p_version) {
     PlayFabRuntime *runtime = _get_runtime();
     if (runtime == nullptr || !runtime->is_initialized()) {
-        return make_leaderboards_error_op(runtime, E_FAIL, "not_initialized", "PlayFab is not initialized. Call PlayFab.initialize() first.");
+        return make_leaderboards_error_signal(runtime, E_FAIL, "not_initialized", "PlayFab is not initialized. Call PlayFab.initialize() first.");
     }
 
     String user_error;
     if (!validate_playfab_user(p_user, &user_error)) {
-        return make_leaderboards_error_op(runtime, E_INVALIDARG, "invalid_playfab_user", user_error);
+        return make_leaderboards_error_signal(runtime, E_INVALIDARG, "invalid_playfab_user", user_error);
     }
 
     const String leaderboard_name = p_leaderboard_name.strip_edges();
     if (leaderboard_name.is_empty()) {
-        return make_leaderboards_error_op(runtime, E_INVALIDARG, "invalid_leaderboard_name", "Leaderboard operations require a non-empty leaderboard_name.");
+        return make_leaderboards_error_signal(runtime, E_INVALIDARG, "invalid_leaderboard_name", "Leaderboard operations require a non-empty leaderboard_name.");
     }
 
     const uint32_t page_size = static_cast<uint32_t>(CLAMP<int64_t>(p_page_size, 1, 100));
     const uint32_t start_position = static_cast<uint32_t>(MAX<int64_t>(p_start_position, 1));
 
-    Ref<PlayFabAsyncOp> op;
-    op.instantiate();
-    runtime->retain_op(op);
+    Ref<PlayFabPendingSignal> pending_signal = runtime->make_pending_signal();
 
     auto *context = new LeaderboardQueryContext(
             LeaderboardQueryContext::Mode::Global,
             runtime,
-            op,
+            pending_signal,
             p_user,
             leaderboard_name);
     context->configure_global(page_size, start_position, true, p_version);
@@ -652,48 +647,45 @@ Ref<PlayFabAsyncOp> PlayFabLeaderboards::get_leaderboard_async(
 
     HRESULT hr = context->start();
     if (FAILED(hr)) {
-        op->clear_cancel_handler();
+        pending_signal->clear_cancel_handler();
         delete context;
 
         Ref<PlayFabResult> result = PlayFabResult::hresult_error(hr, "Failed to start the leaderboard query request.", "leaderboard_query_start_failed");
         runtime->set_last_error(result);
-        op->complete(result);
-        return op;
+        pending_signal->complete_deferred(result);
     }
 
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
-Ref<PlayFabAsyncOp> PlayFabLeaderboards::get_leaderboard_around_user_async(
+Signal PlayFabLeaderboards::get_leaderboard_around_user_async(
         const Ref<PlayFabUser> &p_user,
         const String &p_leaderboard_name,
         int64_t p_max_surrounding_entries,
         int64_t p_version) {
     PlayFabRuntime *runtime = _get_runtime();
     if (runtime == nullptr || !runtime->is_initialized()) {
-        return make_leaderboards_error_op(runtime, E_FAIL, "not_initialized", "PlayFab is not initialized. Call PlayFab.initialize() first.");
+        return make_leaderboards_error_signal(runtime, E_FAIL, "not_initialized", "PlayFab is not initialized. Call PlayFab.initialize() first.");
     }
 
     String user_error;
     if (!validate_playfab_user(p_user, &user_error)) {
-        return make_leaderboards_error_op(runtime, E_INVALIDARG, "invalid_playfab_user", user_error);
+        return make_leaderboards_error_signal(runtime, E_INVALIDARG, "invalid_playfab_user", user_error);
     }
 
     const String leaderboard_name = p_leaderboard_name.strip_edges();
     if (leaderboard_name.is_empty()) {
-        return make_leaderboards_error_op(runtime, E_INVALIDARG, "invalid_leaderboard_name", "Leaderboard operations require a non-empty leaderboard_name.");
+        return make_leaderboards_error_signal(runtime, E_INVALIDARG, "invalid_leaderboard_name", "Leaderboard operations require a non-empty leaderboard_name.");
     }
 
     const uint32_t max_surrounding_entries = static_cast<uint32_t>(CLAMP<int64_t>(p_max_surrounding_entries, 1, 100));
 
-    Ref<PlayFabAsyncOp> op;
-    op.instantiate();
-    runtime->retain_op(op);
+    Ref<PlayFabPendingSignal> pending_signal = runtime->make_pending_signal();
 
     auto *context = new LeaderboardQueryContext(
             LeaderboardQueryContext::Mode::Around,
             runtime,
-            op,
+            pending_signal,
             p_user,
             leaderboard_name);
     context->configure_around(max_surrounding_entries, p_version);
@@ -701,47 +693,44 @@ Ref<PlayFabAsyncOp> PlayFabLeaderboards::get_leaderboard_around_user_async(
 
     HRESULT hr = context->start();
     if (FAILED(hr)) {
-        op->clear_cancel_handler();
+        pending_signal->clear_cancel_handler();
         delete context;
 
         Ref<PlayFabResult> result = PlayFabResult::hresult_error(hr, "Failed to start the around-user leaderboard query request.", "leaderboard_around_user_start_failed");
         runtime->set_last_error(result);
-        op->complete(result);
-        return op;
+        pending_signal->complete_deferred(result);
     }
 
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
-Ref<PlayFabAsyncOp> PlayFabLeaderboards::get_friend_leaderboard_async(
+Signal PlayFabLeaderboards::get_friend_leaderboard_async(
         const Ref<PlayFabUser> &p_user,
         const String &p_leaderboard_name,
         bool p_include_xbox_friends,
         int64_t p_version) {
     PlayFabRuntime *runtime = _get_runtime();
     if (runtime == nullptr || !runtime->is_initialized()) {
-        return make_leaderboards_error_op(runtime, E_FAIL, "not_initialized", "PlayFab is not initialized. Call PlayFab.initialize() first.");
+        return make_leaderboards_error_signal(runtime, E_FAIL, "not_initialized", "PlayFab is not initialized. Call PlayFab.initialize() first.");
     }
 
     String user_error;
     if (!validate_playfab_user(p_user, &user_error)) {
-        return make_leaderboards_error_op(runtime, E_INVALIDARG, "invalid_playfab_user", user_error);
+        return make_leaderboards_error_signal(runtime, E_INVALIDARG, "invalid_playfab_user", user_error);
     }
 
     const String leaderboard_name = p_leaderboard_name.strip_edges();
     if (leaderboard_name.is_empty()) {
-        return make_leaderboards_error_op(runtime, E_INVALIDARG, "invalid_leaderboard_name", "Leaderboard operations require a non-empty leaderboard_name.");
+        return make_leaderboards_error_signal(runtime, E_INVALIDARG, "invalid_leaderboard_name", "Leaderboard operations require a non-empty leaderboard_name.");
     }
 
-    Ref<PlayFabAsyncOp> op;
-    op.instantiate();
-    runtime->retain_op(op);
+    Ref<PlayFabPendingSignal> pending_signal = runtime->make_pending_signal();
 
     if (!p_include_xbox_friends) {
         auto *context = new LeaderboardQueryContext(
                 LeaderboardQueryContext::Mode::Friends,
                 runtime,
-                op,
+                pending_signal,
                 p_user,
                 leaderboard_name);
         context->configure_friends(String(), p_version, false);
@@ -749,14 +738,14 @@ Ref<PlayFabAsyncOp> PlayFabLeaderboards::get_friend_leaderboard_async(
 
         HRESULT hr = context->start();
         if (FAILED(hr)) {
-            op->clear_cancel_handler();
+            pending_signal->clear_cancel_handler();
             delete context;
 
             Ref<PlayFabResult> result = PlayFabResult::hresult_error(hr, "Failed to start the friend leaderboard request.", "friend_leaderboard_start_failed");
             runtime->set_last_error(result);
-            op->complete(result);
+            pending_signal->complete_deferred(result);
         }
-        return op;
+        return pending_signal->get_completed_signal();
     }
 
     XUserLocalId local_id = {};
@@ -767,24 +756,24 @@ Ref<PlayFabAsyncOp> PlayFabLeaderboards::get_friend_leaderboard_async(
     if (FAILED(hr)) {
         Ref<PlayFabResult> result = PlayFabResult::hresult_error(hr, "Failed to find an active XUserHandle for the Xbox friends leaderboard request.", "friend_leaderboard_xuser_not_found");
         runtime->set_last_error(result);
-        op->complete(result);
-        return op;
+        pending_signal->complete_deferred(result);
+        return pending_signal->get_completed_signal();
     }
 
-    auto *token_context = new FriendLeaderboardTokenContext(this, runtime, op, p_user, user_handle, leaderboard_name, p_version);
+    auto *token_context = new FriendLeaderboardTokenContext(this, runtime, pending_signal, p_user, user_handle, leaderboard_name, p_version);
     token_context->bind_cancel_handler();
 
     hr = token_context->start();
     if (FAILED(hr)) {
-        op->clear_cancel_handler();
+        pending_signal->clear_cancel_handler();
         delete token_context;
 
         Ref<PlayFabResult> result = PlayFabResult::hresult_error(hr, "Failed to start the Xbox token request for the friend leaderboard call.", "friend_leaderboard_token_start_failed");
         runtime->set_last_error(result);
-        op->complete(result);
+        pending_signal->complete_deferred(result);
     }
 
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
 } // namespace godot

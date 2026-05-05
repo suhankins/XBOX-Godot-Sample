@@ -7,6 +7,10 @@ extends RefCounted
 const GameConfigManagerScript = preload("res://addons/godot_gdk_packaging/editor/game_config_manager.gd")
 const GDKToolchainScript = preload("res://addons/godot_gdk_packaging/editor/gdk_toolchain.gd")
 const MakePkgExecutorScript = preload("res://addons/godot_gdk_packaging/editor/makepkg_executor.gd")
+const PackagingSettingsStoreScript = preload("res://addons/godot_gdk_packaging/editor/packaging_settings_store.gd")
+const ExportPresetCatalogScript = preload("res://addons/godot_gdk_packaging/editor/export_preset_catalog.gd")
+const PackagingContentPreparerScript = preload("res://addons/godot_gdk_packaging/editor/packaging_content_preparer.gd")
+const WdappManagerScript = preload("res://addons/godot_gdk_packaging/editor/wdapp_manager.gd")
 
 func run(context) -> void:
 	_test_toolchain_detection(context)
@@ -14,6 +18,9 @@ func run(context) -> void:
 	_test_config_template_creation(context)
 	_test_makepkg_argument_construction(context)
 	_test_settings_persistence(context)
+	_test_export_preset_parsing(context)
+	_test_content_preparer_helpers(context)
+	_test_wdapp_output_parsing(context)
 	_test_xml_escaping(context)
 
 
@@ -147,19 +154,38 @@ func _test_config_template_creation(context) -> void:
 func _test_makepkg_argument_construction(context) -> void:
 	context.log_section("Makepkg Argument Construction")
 
-	# We can't run makepkg without GDK, but we can verify the executor
-	# builds correct argument arrays by inspecting the print output
 	var toolchain = GDKToolchainScript.new()
-	if not toolchain.is_gdk_available():
-		context.log_skip("makepkg args", "GDK not installed")
-		return
-
 	var executor = MakePkgExecutorScript.new(toolchain)
 	context.assert_not_null(executor, "MakePkgExecutor created")
 
-	# Verify the toolchain paths are set
-	context.assert_true(toolchain.get_makepkg_path().ends_with("makepkg.exe"),
-		"makepkg path ends with makepkg.exe")
+	var pack_args = executor.build_pack_args("C:/src", "C:/src/layout.xml", "C:/pkg", {
+		"content_id": "content-id",
+		"product_id": "product-id",
+		"encrypt_key": "keys.lekb",
+		"updcompat": 2,
+	})
+	context.assert_eq(pack_args[0], "pack", "pack args start with command")
+	context.assert_true(pack_args.has("/contentid"), "pack args include content id")
+	context.assert_true(pack_args.has("/productid"), "pack args include product id")
+	context.assert_true(pack_args.has("/lk"), "pack args include custom key switch")
+	context.assert_true(pack_args.has("keys.lekb"), "pack args include custom key path")
+	context.assert_true(pack_args.has("/updcompat"), "pack args include updcompat")
+
+	var genmap_args = executor.build_genmap_args("C:/build", "C:/pkg/layout.xml")
+	context.assert_eq(genmap_args, PackedStringArray([
+		"genmap",
+		"/f", "C:/pkg/layout.xml",
+		"/d", "C:/build",
+	]), "genmap args match expected layout")
+
+	var validate_args = executor.build_validate_args("C:/build/layout.xml", "C:/build", "C:/pkg")
+	context.assert_eq(validate_args, PackedStringArray([
+		"validate",
+		"/f", "C:/build/layout.xml",
+		"/d", "C:/build",
+		"/pd", "C:/pkg",
+		"/pc",
+	]), "validate args match expected layout")
 
 
 # ── Settings Persistence ────────────────────────────────────────────────────
@@ -168,27 +194,71 @@ func _test_settings_persistence(context) -> void:
 	context.log_section("Settings Persistence")
 
 	var test_path = ProjectSettings.globalize_path("res://test_settings.cfg")
+	var store = PackagingSettingsStoreScript.new()
+	var state = store.get_default_state()
+	state["packaging"]["source_dir"] = "/test/source"
+	state["packaging"]["output_dir"] = "/test/output"
+	state["sandbox"]["sandbox_id"] = "XDKS.1"
+	state["sandbox"]["test_account"] = "testuser@xboxtest.com"
+	state["export"]["preset_name"] = "Windows Debug"
+	state["export"]["clean_build"] = true
 
-	# Write
-	var cfg := ConfigFile.new()
-	cfg.set_value("packaging", "source_dir", "/test/source")
-	cfg.set_value("packaging", "output_dir", "/test/output")
-	cfg.set_value("sandbox", "sandbox_id", "XDKS.1")
-	cfg.set_value("sandbox", "test_account", "testuser@xboxtest.com")
-	var err = cfg.save(test_path)
+	var err = store.save_state(test_path, state)
 	context.assert_eq(err, OK, "save settings file")
 
-	# Read back
-	var cfg2 := ConfigFile.new()
-	err = cfg2.load(test_path)
-	context.assert_eq(err, OK, "load settings file")
-	context.assert_eq(cfg2.get_value("packaging", "source_dir"), "/test/source", "source_dir persisted")
-	context.assert_eq(cfg2.get_value("packaging", "output_dir"), "/test/output", "output_dir persisted")
-	context.assert_eq(cfg2.get_value("sandbox", "sandbox_id"), "XDKS.1", "sandbox_id persisted")
-	context.assert_eq(cfg2.get_value("sandbox", "test_account"), "testuser@xboxtest.com", "test_account persisted")
+	var loaded_state = store.load_state(test_path)
+	context.assert_eq(loaded_state["packaging"]["source_dir"], "/test/source", "source_dir persisted")
+	context.assert_eq(loaded_state["packaging"]["output_dir"], "/test/output", "output_dir persisted")
+	context.assert_eq(loaded_state["sandbox"]["sandbox_id"], "XDKS.1", "sandbox_id persisted")
+	context.assert_eq(loaded_state["sandbox"]["test_account"], "testuser@xboxtest.com", "test_account persisted")
+	context.assert_eq(loaded_state["export"]["preset_name"], "Windows Debug", "preset_name persisted")
+	context.assert_true(loaded_state["export"]["clean_build"], "clean_build persisted")
 
 	# Clean up
 	DirAccess.remove_absolute(test_path)
+
+
+func _test_export_preset_parsing(context) -> void:
+	context.log_section("Export Preset Parsing")
+
+	var content := '[preset.0]\nname="Windows Debug"\nplatform="Windows Desktop"\n\n'
+	content += '[preset.1]\nname="Android"\nplatform="Android"\n\n'
+	content += '[preset.2]\nname="Windows Release"\nplatform="Windows Desktop"\n'
+
+	var presets = ExportPresetCatalogScript.parse_presets(content)
+	context.assert_eq(presets.size(), 2, "only Windows Desktop presets returned")
+	context.assert_eq(presets[0]["name"], "Windows Debug", "first preset name parsed")
+	context.assert_eq(presets[0]["preset_index"], 0, "first preset index parsed")
+	context.assert_eq(presets[1]["name"], "Windows Release", "second preset name parsed")
+
+
+func _test_content_preparer_helpers(context) -> void:
+	context.log_section("Packaging Content Preparation")
+
+	var xml := '<Game>\n  <ExecutableList>\n    <Executable Name="Old.exe" Id="Game" />\n  </ExecutableList>\n</Game>\n'
+	var patched = PackagingContentPreparerScript.patch_executable_name(xml, "NewGame.exe")
+	context.assert_true(patched.contains('Executable Name="NewGame.exe"'), "executable name patched")
+
+	var with_dependency = PackagingContentPreparerScript.inject_vc14_dependency("<Game>\n</Game>\n")
+	context.assert_true(with_dependency.contains('<KnownDependency Name="VC14"/>'), "VC14 dependency injected")
+
+	var unchanged = PackagingContentPreparerScript.inject_vc14_dependency(with_dependency)
+	context.assert_eq(unchanged, with_dependency, "VC14 dependency not duplicated")
+
+
+func _test_wdapp_output_parsing(context) -> void:
+	context.log_section("wdapp Output Parsing")
+
+	var sample_output := "Registered apps:\n"
+	sample_output += "ContosoGame_1.0.0.0_x64__8wekyb3d8bbwe\n"
+	sample_output += "    ContosoGame_1.0.0.0_x64__8wekyb3d8bbwe!Game\n"
+	sample_output += "AnotherGame_1.0.0.0_x64__8wekyb3d8bbwe\n"
+	sample_output += "    AnotherGame_1.0.0.0_x64__8wekyb3d8bbwe!App\n"
+
+	var apps = WdappManagerScript.parse_registered_apps(sample_output)
+	context.assert_eq(apps.size(), 2, "two registered apps parsed")
+	context.assert_eq(apps[0]["pfn"], "ContosoGame_1.0.0.0_x64__8wekyb3d8bbwe", "first PFN parsed")
+	context.assert_eq(apps[0]["aumid"], "ContosoGame_1.0.0.0_x64__8wekyb3d8bbwe!Game", "first AUMID parsed")
 
 
 # ── XML Escaping ────────────────────────────────────────────────────────────

@@ -7,10 +7,10 @@
 #include <playfab/gamesave/PFGameSaveFiles.h>
 
 #include "playfab.h"
-#include "playfab_async_op.h"
+#include "playfab_pending_signal.h"
 #include "playfab_result.h"
+#include "playfab_signal_xasync_context.h"
 #include "playfab_user.h"
-#include "playfab_xasync_context.h"
 
 namespace godot {
 
@@ -26,20 +26,20 @@ bool is_cancelled_hresult(HRESULT p_hresult) {
     return p_hresult == E_ABORT || p_hresult == E_PF_GAMESAVE_USER_CANCELLED;
 }
 
-Ref<PlayFabAsyncOp> make_game_saves_error_op(
+Signal make_game_saves_error_signal(
         PlayFabRuntime *p_runtime,
         HRESULT p_hresult,
         const String &p_code,
         const String &p_message,
         const Variant &p_data = Variant()) {
     if (p_runtime != nullptr) {
-        return p_runtime->make_error_async_op(p_hresult, p_code, p_message, p_data);
+        return p_runtime->make_error_signal(p_hresult, p_code, p_message, p_data);
     }
 
-    Ref<PlayFabAsyncOp> op;
-    op.instantiate();
-    op->complete(PlayFabResult::error_result(p_hresult, p_code, p_message, p_data));
-    return op;
+    Ref<PlayFabPendingSignal> pending_signal;
+    pending_signal.instantiate();
+    pending_signal->complete_deferred(PlayFabResult::error_result(p_hresult, p_code, p_message, p_data));
+    return pending_signal->get_completed_signal();
 }
 
 Ref<PlayFabResult> make_game_saves_error_result(
@@ -169,7 +169,7 @@ HRESULT build_user_state_snapshot(PFLocalUserHandle p_local_user_handle, const R
     return S_OK;
 }
 
-class GameSaveSimpleAsyncContext final : public PlayFabXAsyncContext {
+class GameSaveSimpleAsyncContext final : public PlayFabSignalXAsyncContext {
     PFLocalUserHandle m_local_user_handle = nullptr;
     HRESULT (*m_result_fn)(XAsyncBlock *) = nullptr;
     Variant m_success_data;
@@ -180,14 +180,14 @@ class GameSaveSimpleAsyncContext final : public PlayFabXAsyncContext {
 public:
     GameSaveSimpleAsyncContext(
             PlayFabRuntime *p_runtime,
-            const Ref<PlayFabAsyncOp> &p_op,
+            const Ref<PlayFabPendingSignal> &p_pending_signal,
             PFLocalUserHandle p_local_user_handle,
             HRESULT (*p_result_fn)(XAsyncBlock *),
             const Variant &p_success_data,
             const String &p_cancel_message,
             const String &p_failure_action,
             const String &p_failure_code) :
-            PlayFabXAsyncContext(p_runtime, p_op),
+            PlayFabSignalXAsyncContext(p_runtime, p_pending_signal),
             m_local_user_handle(p_local_user_handle),
             m_result_fn(p_result_fn),
             m_success_data(p_success_data),
@@ -206,10 +206,10 @@ protected:
     void finalize(XAsyncBlock *p_async_block) override {
         Ref<PlayFabResult> result;
 
-        if (get_runtime()->is_shutting_down() || get_op()->was_cancel_requested()) {
+        if (get_runtime()->is_shutting_down() || get_pending_signal()->was_cancel_requested()) {
             result = PlayFabResult::cancelled(m_cancel_message);
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -217,13 +217,13 @@ protected:
         if (is_cancelled_hresult(status_hr)) {
             result = PlayFabResult::cancelled(m_cancel_message);
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
         if (FAILED(status_hr)) {
             result = PlayFabResult::hresult_error(status_hr, m_failure_action, m_failure_code);
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -231,32 +231,32 @@ protected:
         if (is_cancelled_hresult(result_hr)) {
             result = PlayFabResult::cancelled(m_cancel_message);
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
         if (FAILED(result_hr)) {
             result = PlayFabResult::hresult_error(result_hr, m_failure_action, m_failure_code);
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
         get_runtime()->clear_last_error();
-        get_op()->complete(PlayFabResult::ok_result(m_success_data));
+        get_pending_signal()->complete(PlayFabResult::ok_result(m_success_data));
     }
 };
 
-class GameSaveAddUserContext final : public PlayFabXAsyncContext {
+class GameSaveAddUserContext final : public PlayFabSignalXAsyncContext {
     Ref<PlayFabUser> m_user;
     PFLocalUserHandle m_local_user_handle = nullptr;
 
 public:
     GameSaveAddUserContext(
             PlayFabRuntime *p_runtime,
-            const Ref<PlayFabAsyncOp> &p_op,
+            const Ref<PlayFabPendingSignal> &p_pending_signal,
             const Ref<PlayFabUser> &p_user,
             PFLocalUserHandle p_local_user_handle) :
-            PlayFabXAsyncContext(p_runtime, p_op),
+            PlayFabSignalXAsyncContext(p_runtime, p_pending_signal),
             m_user(p_user),
             m_local_user_handle(p_local_user_handle) {}
 
@@ -271,10 +271,10 @@ protected:
     void finalize(XAsyncBlock *p_async_block) override {
         Ref<PlayFabResult> result;
 
-        if (get_runtime()->is_shutting_down() || get_op()->was_cancel_requested()) {
+        if (get_runtime()->is_shutting_down() || get_pending_signal()->was_cancel_requested()) {
             result = PlayFabResult::cancelled("Game Saves user sync cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -282,13 +282,13 @@ protected:
         if (is_cancelled_hresult(status_hr)) {
             result = PlayFabResult::cancelled("Game Saves user sync cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
         if (FAILED(status_hr)) {
             result = PlayFabResult::hresult_error(status_hr, "Failed to add the PlayFab user to Game Saves.", "gamesave_add_user_failed");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -296,13 +296,13 @@ protected:
         if (is_cancelled_hresult(result_hr)) {
             result = PlayFabResult::cancelled("Game Saves user sync cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
         if (FAILED(result_hr)) {
             result = PlayFabResult::hresult_error(result_hr, "Failed to finish adding the PlayFab user to Game Saves.", "gamesave_add_user_result_failed");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -311,12 +311,12 @@ protected:
         if (FAILED(snapshot_hr)) {
             result = PlayFabResult::hresult_error(snapshot_hr, "Failed to query the synchronized Game Saves state.", "gamesave_state_snapshot_failed");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
         get_runtime()->clear_last_error();
-        get_op()->complete(PlayFabResult::ok_result(snapshot));
+        get_pending_signal()->complete(PlayFabResult::ok_result(snapshot));
     }
 };
 
@@ -341,29 +341,27 @@ void PlayFabGameSaves::set_owner(PlayFab *p_owner) {
     m_owner = p_owner;
 }
 
-Ref<PlayFabAsyncOp> PlayFabGameSaves::add_user_with_ui_async(const Ref<PlayFabUser> &p_user, int64_t p_options) {
+Signal PlayFabGameSaves::add_user_with_ui_async(const Ref<PlayFabUser> &p_user, int64_t p_options) {
     PlayFabRuntime *runtime = _get_runtime();
     if (runtime == nullptr || !runtime->is_initialized()) {
-        return make_game_saves_error_op(runtime, E_FAIL, "not_initialized", "PlayFab is not initialized. Call PlayFab.initialize() first.");
+        return make_game_saves_error_signal(runtime, E_FAIL, "not_initialized", "PlayFab is not initialized. Call PlayFab.initialize() first.");
     }
     if (!PLAYFAB_GDK_PLATFORM) {
-        return make_game_saves_error_op(runtime, E_FAIL, "platform_unsupported", "PlayFab Game Saves is only supported on GDK platforms right now.");
+        return make_game_saves_error_signal(runtime, E_FAIL, "platform_unsupported", "PlayFab Game Saves is only supported on GDK platforms right now.");
     }
     if (p_options < 0 || p_options > static_cast<int64_t>(UINT32_MAX)) {
-        return make_game_saves_error_op(runtime, E_INVALIDARG, "invalid_options", "Game Saves add-user options must fit in a uint32 bitmask.");
+        return make_game_saves_error_signal(runtime, E_INVALIDARG, "invalid_options", "Game Saves add-user options must fit in a uint32 bitmask.");
     }
 
     PFLocalUserHandle local_user_handle = nullptr;
     HRESULT user_hr = duplicate_local_user_handle(p_user, &local_user_handle);
     if (FAILED(user_hr)) {
-        return make_game_saves_error_op(runtime, user_hr, "invalid_user", "Game Saves operations require a signed-in PlayFabUser created through PlayFab.sign_in_async().");
+        return make_game_saves_error_signal(runtime, user_hr, "invalid_user", "Game Saves operations require a signed-in PlayFabUser created through PlayFab.sign_in_async().");
     }
 
-    Ref<PlayFabAsyncOp> op;
-    op.instantiate();
-    runtime->retain_op(op);
+    Ref<PlayFabPendingSignal> pending_signal = runtime->make_pending_signal();
 
-    auto *context = new GameSaveAddUserContext(runtime, op, p_user, local_user_handle);
+    auto *context = new GameSaveAddUserContext(runtime, pending_signal, p_user, local_user_handle);
     context->bind_cancel_handler();
 
     HRESULT hr = PFGameSaveFilesAddUserWithUiAsync(
@@ -371,43 +369,40 @@ Ref<PlayFabAsyncOp> PlayFabGameSaves::add_user_with_ui_async(const Ref<PlayFabUs
             static_cast<PFGameSaveFilesAddUserOptions>(static_cast<uint32_t>(p_options)),
             context->get_async_block());
     if (FAILED(hr)) {
-        op->clear_cancel_handler();
+        pending_signal->clear_cancel_handler();
         delete context;
 
         Ref<PlayFabResult> result = PlayFabResult::hresult_error(hr, "Failed to start the Game Saves add-user request.", "gamesave_add_user_start_failed");
         runtime->set_last_error(result);
-        op->complete(result);
-        return op;
+        pending_signal->complete_deferred(result);
     }
 
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
-Ref<PlayFabAsyncOp> PlayFabGameSaves::upload_with_ui_async(const Ref<PlayFabUser> &p_user, bool p_release_device_as_active) {
+Signal PlayFabGameSaves::upload_with_ui_async(const Ref<PlayFabUser> &p_user, bool p_release_device_as_active) {
     PlayFabRuntime *runtime = _get_runtime();
     if (runtime == nullptr || !runtime->is_initialized()) {
-        return make_game_saves_error_op(runtime, E_FAIL, "not_initialized", "PlayFab is not initialized. Call PlayFab.initialize() first.");
+        return make_game_saves_error_signal(runtime, E_FAIL, "not_initialized", "PlayFab is not initialized. Call PlayFab.initialize() first.");
     }
     if (!PLAYFAB_GDK_PLATFORM) {
-        return make_game_saves_error_op(runtime, E_FAIL, "platform_unsupported", "PlayFab Game Saves is only supported on GDK platforms right now.");
+        return make_game_saves_error_signal(runtime, E_FAIL, "platform_unsupported", "PlayFab Game Saves is only supported on GDK platforms right now.");
     }
 
     PFLocalUserHandle local_user_handle = nullptr;
     HRESULT user_hr = duplicate_local_user_handle(p_user, &local_user_handle);
     if (FAILED(user_hr)) {
-        return make_game_saves_error_op(runtime, user_hr, "invalid_user", "Game Saves operations require a signed-in PlayFabUser created through PlayFab.sign_in_async().");
+        return make_game_saves_error_signal(runtime, user_hr, "invalid_user", "Game Saves operations require a signed-in PlayFabUser created through PlayFab.sign_in_async().");
     }
 
     Dictionary success_data = make_user_identity_data(p_user);
     success_data["release_device_as_active"] = p_release_device_as_active;
 
-    Ref<PlayFabAsyncOp> op;
-    op.instantiate();
-    runtime->retain_op(op);
+    Ref<PlayFabPendingSignal> pending_signal = runtime->make_pending_signal();
 
     auto *context = new GameSaveSimpleAsyncContext(
             runtime,
-            op,
+            pending_signal,
             local_user_handle,
             PFGameSaveFilesUploadWithUiResult,
             success_data,
@@ -421,43 +416,40 @@ Ref<PlayFabAsyncOp> PlayFabGameSaves::upload_with_ui_async(const Ref<PlayFabUser
             p_release_device_as_active ? PFGameSaveFilesUploadOption::ReleaseDeviceAsActive : PFGameSaveFilesUploadOption::KeepDeviceActive,
             context->get_async_block());
     if (FAILED(hr)) {
-        op->clear_cancel_handler();
+        pending_signal->clear_cancel_handler();
         delete context;
 
         Ref<PlayFabResult> result = PlayFabResult::hresult_error(hr, "Failed to start the Game Saves upload request.", "gamesave_upload_start_failed");
         runtime->set_last_error(result);
-        op->complete(result);
-        return op;
+        pending_signal->complete_deferred(result);
     }
 
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
-Ref<PlayFabAsyncOp> PlayFabGameSaves::set_save_description_async(const Ref<PlayFabUser> &p_user, const String &p_short_save_description) {
+Signal PlayFabGameSaves::set_save_description_async(const Ref<PlayFabUser> &p_user, const String &p_short_save_description) {
     PlayFabRuntime *runtime = _get_runtime();
     if (runtime == nullptr || !runtime->is_initialized()) {
-        return make_game_saves_error_op(runtime, E_FAIL, "not_initialized", "PlayFab is not initialized. Call PlayFab.initialize() first.");
+        return make_game_saves_error_signal(runtime, E_FAIL, "not_initialized", "PlayFab is not initialized. Call PlayFab.initialize() first.");
     }
     if (!PLAYFAB_GDK_PLATFORM) {
-        return make_game_saves_error_op(runtime, E_FAIL, "platform_unsupported", "PlayFab Game Saves is only supported on GDK platforms right now.");
+        return make_game_saves_error_signal(runtime, E_FAIL, "platform_unsupported", "PlayFab Game Saves is only supported on GDK platforms right now.");
     }
 
     PFLocalUserHandle local_user_handle = nullptr;
     HRESULT user_hr = duplicate_local_user_handle(p_user, &local_user_handle);
     if (FAILED(user_hr)) {
-        return make_game_saves_error_op(runtime, user_hr, "invalid_user", "Game Saves operations require a signed-in PlayFabUser created through PlayFab.sign_in_async().");
+        return make_game_saves_error_signal(runtime, user_hr, "invalid_user", "Game Saves operations require a signed-in PlayFabUser created through PlayFab.sign_in_async().");
     }
 
     Dictionary success_data = make_user_identity_data(p_user);
     success_data["short_save_description"] = p_short_save_description;
 
-    Ref<PlayFabAsyncOp> op;
-    op.instantiate();
-    runtime->retain_op(op);
+    Ref<PlayFabPendingSignal> pending_signal = runtime->make_pending_signal();
 
     auto *context = new GameSaveSimpleAsyncContext(
             runtime,
-            op,
+            pending_signal,
             local_user_handle,
             PFGameSaveFilesSetSaveDescriptionResult,
             success_data,
@@ -472,42 +464,39 @@ Ref<PlayFabAsyncOp> PlayFabGameSaves::set_save_description_async(const Ref<PlayF
             description_utf8.get_data(),
             context->get_async_block());
     if (FAILED(hr)) {
-        op->clear_cancel_handler();
+        pending_signal->clear_cancel_handler();
         delete context;
 
         Ref<PlayFabResult> result = PlayFabResult::hresult_error(hr, "Failed to start the Game Saves description request.", "gamesave_set_description_start_failed");
         runtime->set_last_error(result);
-        op->complete(result);
-        return op;
+        pending_signal->complete_deferred(result);
     }
 
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
-Ref<PlayFabAsyncOp> PlayFabGameSaves::reset_cloud_async(const Ref<PlayFabUser> &p_user) {
+Signal PlayFabGameSaves::reset_cloud_async(const Ref<PlayFabUser> &p_user) {
     PlayFabRuntime *runtime = _get_runtime();
     if (runtime == nullptr || !runtime->is_initialized()) {
-        return make_game_saves_error_op(runtime, E_FAIL, "not_initialized", "PlayFab is not initialized. Call PlayFab.initialize() first.");
+        return make_game_saves_error_signal(runtime, E_FAIL, "not_initialized", "PlayFab is not initialized. Call PlayFab.initialize() first.");
     }
     if (!PLAYFAB_GDK_PLATFORM) {
-        return make_game_saves_error_op(runtime, E_FAIL, "platform_unsupported", "PlayFab Game Saves is only supported on GDK platforms right now.");
+        return make_game_saves_error_signal(runtime, E_FAIL, "platform_unsupported", "PlayFab Game Saves is only supported on GDK platforms right now.");
     }
 
     PFLocalUserHandle local_user_handle = nullptr;
     HRESULT user_hr = duplicate_local_user_handle(p_user, &local_user_handle);
     if (FAILED(user_hr)) {
-        return make_game_saves_error_op(runtime, user_hr, "invalid_user", "Game Saves operations require a signed-in PlayFabUser created through PlayFab.sign_in_async().");
+        return make_game_saves_error_signal(runtime, user_hr, "invalid_user", "Game Saves operations require a signed-in PlayFabUser created through PlayFab.sign_in_async().");
     }
 
     Dictionary success_data = make_user_identity_data(p_user);
 
-    Ref<PlayFabAsyncOp> op;
-    op.instantiate();
-    runtime->retain_op(op);
+    Ref<PlayFabPendingSignal> pending_signal = runtime->make_pending_signal();
 
     auto *context = new GameSaveSimpleAsyncContext(
             runtime,
-            op,
+            pending_signal,
             local_user_handle,
             PFGameSaveFilesResetCloudResult,
             success_data,
@@ -518,16 +507,15 @@ Ref<PlayFabAsyncOp> PlayFabGameSaves::reset_cloud_async(const Ref<PlayFabUser> &
 
     HRESULT hr = PFGameSaveFilesResetCloudAsync(local_user_handle, context->get_async_block());
     if (FAILED(hr)) {
-        op->clear_cancel_handler();
+        pending_signal->clear_cancel_handler();
         delete context;
 
         Ref<PlayFabResult> result = PlayFabResult::hresult_error(hr, "Failed to start the Game Saves reset-cloud request.", "gamesave_reset_cloud_start_failed");
         runtime->set_last_error(result);
-        op->complete(result);
-        return op;
+        pending_signal->complete_deferred(result);
     }
 
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
 Ref<PlayFabResult> PlayFabGameSaves::get_folder(const Ref<PlayFabUser> &p_user) const {

@@ -143,6 +143,54 @@ function(godot_addon_sync_files_to_sample)
     endforeach()
 endfunction()
 
+function(godot_addon_sync_directory)
+    set(one_value_args TARGET_NAME SOURCE_DIR)
+    set(multi_value_args MIRROR_DIRS)
+    cmake_parse_arguments(ARG "" "${one_value_args}" "${multi_value_args}" ${ARGN})
+
+    if(NOT ARG_TARGET_NAME OR NOT ARG_SOURCE_DIR)
+        message(FATAL_ERROR "godot_addon_sync_directory requires TARGET_NAME and SOURCE_DIR.")
+    endif()
+
+    if(NOT ARG_MIRROR_DIRS)
+        return()
+    endif()
+
+    file(GLOB_RECURSE sync_files LIST_DIRECTORIES false RELATIVE "${ARG_SOURCE_DIR}" CONFIGURE_DEPENDS
+        "${ARG_SOURCE_DIR}/*")
+
+    if(NOT sync_files)
+        return()
+    endif()
+
+    set(sync_commands)
+    foreach(mirror_dir IN LISTS ARG_MIRROR_DIRS)
+        list(APPEND sync_commands
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${mirror_dir}"
+        )
+
+        foreach(sync_file IN LISTS sync_files)
+            get_filename_component(sync_subdir "${sync_file}" DIRECTORY)
+            if(sync_subdir)
+                list(APPEND sync_commands
+                    COMMAND ${CMAKE_COMMAND} -E make_directory "${mirror_dir}/${sync_subdir}"
+                )
+            endif()
+
+            list(APPEND sync_commands
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${ARG_SOURCE_DIR}/${sync_file}"
+                    "${mirror_dir}/${sync_file}"
+            )
+        endforeach()
+    endforeach()
+
+    add_custom_target(${ARG_TARGET_NAME} ALL
+        ${sync_commands}
+        COMMENT "Syncing addon mirrors from ${ARG_SOURCE_DIR}"
+    )
+endfunction()
+
 
 #[[ godot_addon_doc_sources
 

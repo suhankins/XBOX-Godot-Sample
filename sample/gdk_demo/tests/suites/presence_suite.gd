@@ -43,21 +43,17 @@ func run(context) -> void:
 		context.log_skip("Presence runtime behavior", init_result.message)
 		return
 
-	var missing_xuids_op = presence.get_presence_async(PackedStringArray())
-	context.assert_not_null(missing_xuids_op, "get_presence_async() returns GDKAsyncOp for empty XUID lists")
-	if missing_xuids_op != null:
-		context.assert_result_error(missing_xuids_op.get_result(), "missing_presence_xuids", "get_presence_async() rejects empty XUID lists")
+	var missing_xuids_signal = presence.get_presence_async(PackedStringArray())
+	await context.assert_signal_result_error(missing_xuids_signal, "missing_presence_xuids", "get_presence_async() rejects empty XUID lists")
 
-	var invalid_xuid_op = presence.get_presence_async(PackedStringArray(["not-a-number"]))
-	context.assert_not_null(invalid_xuid_op, "get_presence_async() returns GDKAsyncOp for invalid XUIDs")
-	if invalid_xuid_op != null:
-		context.assert_result_error(invalid_xuid_op.get_result(), "invalid_presence_xuid", "get_presence_async() rejects non-numeric XUID strings")
+	var invalid_xuid_signal = presence.get_presence_async(PackedStringArray(["not-a-number"]))
+	await context.assert_signal_result_error(invalid_xuid_signal, "invalid_presence_xuid", "get_presence_async() rejects non-numeric XUID strings")
 
-	var sign_in = context.ensure_primary_user()
-	var sign_in_op = sign_in["op"]
+	var sign_in = await context.ensure_primary_user()
+	var sign_in_signal = sign_in["signal"]
 	var sign_in_result = sign_in["result"]
 	var user = sign_in["user"]
-	if sign_in_op != null and sign_in_result == null:
+	if typeof(sign_in_signal) == TYPE_SIGNAL and sign_in_result == null:
 		context.log_fail("Default-user flow for presence completes", "timed out waiting for a signed-in user")
 		context.reset_runtime()
 		return
@@ -71,17 +67,14 @@ func run(context) -> void:
 		context.reset_runtime()
 		return
 
-	var invalid_state_op = presence.set_presence_async(user, "   ")
-	context.assert_not_null(invalid_state_op, "set_presence_async() returns GDKAsyncOp for a signed-in user")
-	if invalid_state_op != null:
-		context.assert_result_error(invalid_state_op.get_result(), "invalid_presence_state", "set_presence_async() rejects blank presence states")
+	var invalid_state_signal = presence.set_presence_async(user, "   ")
+	await context.assert_signal_result_error(invalid_state_signal, "invalid_presence_state", "set_presence_async() rejects blank presence states")
 
-	var query_op = presence.get_presence_async(PackedStringArray([user.get_xuid()]))
-	context.assert_not_null(query_op, "get_presence_async() returns GDKAsyncOp for the signed-in user's XUID")
-	if query_op != null:
-		var query_result = context.wait_for_op(query_op, 8000)
+	var query_signal = presence.get_presence_async(PackedStringArray([user.get_xuid()]))
+	context.assert_true(typeof(query_signal) == TYPE_SIGNAL, "get_presence_async() returns completion Signal for the signed-in user's XUID")
+	if typeof(query_signal) == TYPE_SIGNAL:
+		var query_result = await context.wait_for_signal(query_signal, 8000)
 		if query_result == null:
-			query_op.cancel()
 			context.log_skip("get_presence_async()", "Timed out waiting for the presence query to finish.")
 			context.reset_runtime()
 			return

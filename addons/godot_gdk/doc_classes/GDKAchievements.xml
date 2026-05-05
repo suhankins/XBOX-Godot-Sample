@@ -4,24 +4,24 @@
 		Achievement service accessed via GDK.achievements.
 	</brief_description>
 	<description>
-		Wraps the Xbox Achievements Manager. Query and update achievements for signed-in users. Uses the dispatch-driven [GDKDispatchOp] pattern — call [method GDK.dispatch] to pump completions.
+		Wraps the Xbox Achievements Manager. Query and update achievements for signed-in users. Achievement requests return completion [Signal] values that resolve after [method GDK.dispatch] pumps the manager state.
 	</description>
 	<tutorials></tutorials>
 	<methods>
 		<method name="query_player_achievements_async">
-			<return type="GDKDispatchOp" />
+			<return type="Signal" />
 			<param index="0" name="user" type="GDKUser" />
 			<description>
-				Queries all achievements for the specified [param user]. Returns a [GDKDispatchOp] that completes when the query finishes. Results are cached and accessible via [method get_cached_achievements].
+				Queries all achievements for the specified [param user]. Await the returned completion [Signal] to receive the final [GDKResult]. Results are cached and accessible via [method get_cached_achievements].
 			</description>
 		</method>
 		<method name="update_achievement_async">
-			<return type="GDKDispatchOp" />
+			<return type="Signal" />
 			<param index="0" name="user" type="GDKUser" />
 			<param index="1" name="achievement_id" type="String" />
 			<param index="2" name="percent_complete" type="int" />
 			<description>
-				Updates the progress of an achievement for the specified [param user]. Set [param percent_complete] to 100 to unlock. Returns a [GDKDispatchOp].
+				Updates the progress of an achievement for the specified [param user]. Set [param percent_complete] to 100 to unlock. Await the returned completion [Signal] to receive the final [GDKResult].
 			</description>
 		</method>
 		<method name="get_cached_achievements" qualifiers="const">

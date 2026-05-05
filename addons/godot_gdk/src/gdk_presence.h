@@ -16,6 +16,7 @@
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/packed_string_array.hpp>
 #include <godot_cpp/variant/string.hpp>
+#include <godot_cpp/variant/variant.hpp>
 
 #include <XUser.h>
 #include <xsapi-c/services_c.h>
@@ -23,7 +24,6 @@
 namespace godot {
 
 class GDK;
-class GDKAsyncOp;
 class GDKResult;
 class GDKRuntime;
 class GDKUser;
@@ -69,7 +69,7 @@ class GDKPresence : public RefCounted {
 
     GDKRuntime *_get_runtime() const;
     GDKXboxServices *_get_xbox_services() const;
-    Ref<GDKAsyncOp> _make_error_async_op(HRESULT p_hresult, const String &p_code, const String &p_message, const Variant &p_data = Variant()) const;
+    Signal _make_error_signal(HRESULT p_hresult, const String &p_code, const String &p_message, const Variant &p_data = Variant()) const;
     Ref<GDKUser> _get_presence_calling_user() const;
     Ref<GDKResult> _parse_query_xuids(const PackedStringArray &p_xuids, std::vector<uint64_t> *r_xuids) const;
     Ref<GDKPresenceRecord> _find_cached_presence(const String &p_xuid) const;
@@ -84,9 +84,9 @@ public:
     Ref<GDKResult> on_runtime_initialized();
     void shutdown();
 
-    Ref<GDKAsyncOp> set_presence_async(const Ref<GDKUser> &p_user, const String &p_state, const Dictionary &p_rich_presence = Dictionary());
-    Ref<GDKAsyncOp> clear_presence_async(const Ref<GDKUser> &p_user);
-    Ref<GDKAsyncOp> get_presence_async(const PackedStringArray &p_xuids);
+    Signal set_presence_async(const Ref<GDKUser> &p_user, const String &p_state, const Dictionary &p_rich_presence = Dictionary());
+    Signal clear_presence_async(const Ref<GDKUser> &p_user);
+    Signal get_presence_async(const PackedStringArray &p_xuids);
     Ref<GDKPresenceRecord> get_cached_presence(const String &p_xuid) const;
 
     void cache_presence_record(const Ref<GDKPresenceRecord> &p_record, bool p_emit_signal = true);

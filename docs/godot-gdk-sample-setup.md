@@ -78,9 +78,12 @@ The sample uses **Xbox test accounts**, not personal Microsoft accounts:
 ## How configuration flows
 
 ```
+project.godot
+  └─► addons/godot_gdk/runtime/gdk_bootstrap.gd
+         reads gdk/runtime/* startup flags → initializes GDK / silent sign-in
+
 sample_config.cfg (single source of truth)
-  ├─► gdk_bootstrap.gd    reads SCID at runtime → initializes Xbox Live
-  ├─► main.gd             reads achievement ID at runtime → unlock button
+  ├─► main.gd              reads achievement ID at runtime → unlock button
   ├─► export preset        auto-populates defaults → used during export
   └─► MicrosoftGame.config generated at export time from preset values
 ```

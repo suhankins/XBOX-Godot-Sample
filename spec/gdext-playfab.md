@@ -4,14 +4,14 @@
 
 This document defines the current design direction for the `godot_playfab` addon.
 
-`godot_playfab` owns PlayFab runtime bootstrap, manual PlayFab sign-in keyed by local Xbox user id, Game Saves flows, and leaderboard flows built on top of the PlayFab C SDKs. The public API is intentionally GDScript-first: a single `PlayFab` root singleton, `RefCounted` wrapper types, and `await`-friendly async operation objects.
+`godot_playfab` owns PlayFab runtime bootstrap, manual PlayFab sign-in keyed by local Xbox user id, Game Saves flows, and leaderboard flows built on top of the PlayFab C SDKs. The public API is intentionally GDScript-first: a single `PlayFab` root singleton, `RefCounted` wrapper types, and direct-await completion signals for one-shot services.
 
 ## Design goals
 
 1. **Single root singleton** — expose one `PlayFab` entry point instead of multiple global singletons.
 2. **Manual sign-in** — PlayFab sign-in is an explicit gameplay action, even though the addon can resolve local Xbox users through `XUser`.
 3. **Project-settings-backed config** — runtime configuration comes from `playfab/titleid` and `playfab/endpoint`.
-4. **Godot-native async flow** — all one-shot requests return `PlayFabAsyncOp` and complete with `PlayFabResult`.
+4. **Godot-native async flow** — one-shot requests return completion `Signal` values that resolve with `PlayFabResult`.
 5. **Typed Game Saves and leaderboard calls** — higher-level services require an already-signed-in `PlayFabUser`.
 6. **Idempotent loading** — multiple synced `.gdextension` files pointing at the same DLL must not duplicate class or singleton registration.
 
@@ -36,7 +36,7 @@ This document defines the current design direction for the `godot_playfab` addon
 
 | Native concept | GDScript wrapper |
 | --- | --- |
-| one-shot async request | `PlayFabAsyncOp` |
+| one-shot async request | `Signal` |
 | HRESULT + payload | `PlayFabResult` |
 | local-user PlayFab session | `PlayFabUser` |
 
@@ -58,11 +58,11 @@ The endpoint setting is optional. When blank, the runtime derives the default en
 
 ## Async model
 
-The addon uses one shared task queue owned by the PlayFab runtime. Native completion stays inside the extension until it is converted into Godot-friendly state and emitted through signals or completed async ops.
+The addon uses one shared task queue owned by the PlayFab runtime. Native completion stays inside the extension until it is converted into Godot-friendly state and emitted through completion signals.
 
 Rules:
 
-1. One-shot public APIs return `PlayFabAsyncOp`.
+1. `PlayFab.sign_in_async()`, `PlayFab.users.sign_in_async()`, Game Saves calls, and leaderboard calls all return completion signals awaited directly.
 2. Completion data is delivered through `PlayFabResult`.
 3. `PlayFabResult.data` uses Godot-native types (`Dictionary`, `Array`, `String`, `int`, etc.).
 4. With `playfab/runtime/embed_dispatch = true`, the addon pumps completions automatically each process frame.
@@ -78,6 +78,8 @@ Publicly exposed data is intentionally narrow:
 - `entity_key`
 
 Xbox-facing identity details do not belong on the PlayFab user wrapper. The wrapper only exposes what higher-level PlayFab systems need.
+
+`PlayFab.users` is intentionally cache/result-driven and does not expose user lifecycle signals. Titles should use explicit sign-in results plus cache lookups (`get_user_by_local_id()` / `get_users()`) instead.
 
 ## Game Saves
 
@@ -110,3 +112,10 @@ Supported calls:
 ## Samples
 
 - `sample\playfab_demo` demonstrates settings-backed init plus manual PlayFab sign-in
+
+## Tests
+
+- `sample\playfab_demo\tests\run_tests.gd` is the PlayFab contract suite.
+- It should keep the root singleton, settings registration, deterministic
+  validation errors, and optional live sign-in smoke flow aligned with the
+  shipped addon behavior.

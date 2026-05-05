@@ -54,11 +54,7 @@ func _run_playfab() -> void:
 
 
 func _await_async_result(op):
-	if op == null:
-		return null
-	if op.is_done():
-		return op.get_result()
-	return await op.completed
+	return await op
 
 
 func _set_status(text: String, is_ok: bool) -> void:

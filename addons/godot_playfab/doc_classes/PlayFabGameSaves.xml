@@ -4,12 +4,12 @@
 		PlayFab Game Saves service.
 	</brief_description>
 	<description>
-		Accessed through [code]PlayFab.game_saves[/code]. All Game Saves methods require a signed-in [PlayFabUser]. Asynchronous operations complete through [PlayFabAsyncOp], while query helpers return a [PlayFabResult] whose [code]data[/code] field contains the requested Godot value.
+		Accessed through [code]PlayFab.game_saves[/code]. All Game Saves methods require a signed-in [PlayFabUser]. Asynchronous methods return completion [Signal] values awaited directly, while query helpers return a [PlayFabResult] whose [code]data[/code] field contains the requested Godot value.
 	</description>
 	<tutorials></tutorials>
 	<methods>
 		<method name="add_user_with_ui_async">
-			<return type="PlayFabAsyncOp" />
+			<return type="Signal" />
 			<param index="0" name="user" type="PlayFabUser" />
 			<param index="1" name="options" type="int" default="0" />
 			<description>
@@ -17,7 +17,7 @@
 			</description>
 		</method>
 		<method name="upload_with_ui_async">
-			<return type="PlayFabAsyncOp" />
+			<return type="Signal" />
 			<param index="0" name="user" type="PlayFabUser" />
 			<param index="1" name="release_device_as_active" type="bool" default="false" />
 			<description>
@@ -25,7 +25,7 @@
 			</description>
 		</method>
 		<method name="set_save_description_async">
-			<return type="PlayFabAsyncOp" />
+			<return type="Signal" />
 			<param index="0" name="user" type="PlayFabUser" />
 			<param index="1" name="short_save_description" type="String" />
 			<description>
@@ -33,7 +33,7 @@
 			</description>
 		</method>
 		<method name="reset_cloud_async">
-			<return type="PlayFabAsyncOp" />
+			<return type="Signal" />
 			<param index="0" name="user" type="PlayFabUser" />
 			<description>
 				Resets the cloud Game Saves state for [param user] without modifying the local save folder. This is primarily useful for development and recovery flows.

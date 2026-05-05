@@ -4,7 +4,7 @@
 
 #include <godot_cpp/classes/project_settings.hpp>
 
-#include "playfab_async_op.h"
+#include "playfab_pending_signal.h"
 #include "playfab_result.h"
 
 namespace godot {
@@ -196,10 +196,10 @@ void PlayFabRuntime::shutdown() {
 
     m_shutting_down = true;
 
-    std::vector<Ref<PlayFabAsyncOp>> active_ops = m_active_ops;
-    for (const Ref<PlayFabAsyncOp> &op : active_ops) {
-        if (op.is_valid()) {
-            op->cancel();
+    std::vector<Ref<PlayFabPendingSignal>> active_pending_signals = m_active_pending_signals;
+    for (const Ref<PlayFabPendingSignal> &pending_signal : active_pending_signals) {
+        if (pending_signal.is_valid()) {
+            pending_signal->cancel();
         }
     }
 
@@ -233,13 +233,13 @@ void PlayFabRuntime::shutdown() {
         m_task_queue = nullptr;
     }
 
-    for (Ref<PlayFabAsyncOp> &op : m_active_ops) {
-        if (op.is_valid()) {
-            op->clear_cancel_handler();
-            op->clear_release_handler();
+    for (Ref<PlayFabPendingSignal> &pending_signal : m_active_pending_signals) {
+        if (pending_signal.is_valid()) {
+            pending_signal->clear_cancel_handler();
+            pending_signal->clear_release_handler();
         }
     }
-    m_active_ops.clear();
+    m_active_pending_signals.clear();
 
     XGameRuntimeUninitialize();
 
@@ -292,39 +292,41 @@ String PlayFabRuntime::get_endpoint() const {
     return m_endpoint;
 }
 
-void PlayFabRuntime::retain_op(const Ref<PlayFabAsyncOp> &p_op) {
-    if (!p_op.is_valid() || p_op->is_done()) {
+void PlayFabRuntime::retain_pending_signal(const Ref<PlayFabPendingSignal> &p_pending_signal) {
+    if (!p_pending_signal.is_valid() || p_pending_signal->is_done()) {
         return;
     }
 
-    p_op->set_release_handler([this](PlayFabAsyncOp *p_completed_op) {
-        release_op(p_completed_op);
+    p_pending_signal->set_release_handler([this](PlayFabPendingSignal *p_completed_signal) {
+        release_pending_signal(p_completed_signal);
     });
-    m_active_ops.push_back(p_op);
+    m_active_pending_signals.push_back(p_pending_signal);
 }
 
-void PlayFabRuntime::release_op(PlayFabAsyncOp *p_op) {
-    m_active_ops.erase(
+void PlayFabRuntime::release_pending_signal(PlayFabPendingSignal *p_pending_signal) {
+    m_active_pending_signals.erase(
             std::remove_if(
-                    m_active_ops.begin(),
-                    m_active_ops.end(),
-                    [p_op](const Ref<PlayFabAsyncOp> &candidate) {
-                        return candidate.is_null() || candidate.operator->() == p_op;
+                    m_active_pending_signals.begin(),
+                    m_active_pending_signals.end(),
+                    [p_pending_signal](const Ref<PlayFabPendingSignal> &candidate) {
+                        return candidate.is_null() || candidate.operator->() == p_pending_signal;
                     }),
-            m_active_ops.end());
+            m_active_pending_signals.end());
 }
 
-Ref<PlayFabAsyncOp> PlayFabRuntime::make_completed_async_op(const Ref<PlayFabResult> &p_result) {
-    Ref<PlayFabAsyncOp> op;
-    op.instantiate();
-    op->complete(p_result);
-    return op;
+Ref<PlayFabPendingSignal> PlayFabRuntime::make_pending_signal() {
+    Ref<PlayFabPendingSignal> pending_signal;
+    pending_signal.instantiate();
+    retain_pending_signal(pending_signal);
+    return pending_signal;
 }
 
-Ref<PlayFabAsyncOp> PlayFabRuntime::make_error_async_op(HRESULT p_hresult, const String &p_code, const String &p_message, const Variant &p_data) {
+Signal PlayFabRuntime::make_error_signal(HRESULT p_hresult, const String &p_code, const String &p_message, const Variant &p_data) {
+    Ref<PlayFabPendingSignal> pending_signal = make_pending_signal();
     Ref<PlayFabResult> result = PlayFabResult::error_result(p_hresult, p_code, p_message, p_data);
     set_last_error(result);
-    return make_completed_async_op(result);
+    pending_signal->complete_deferred(result);
+    return pending_signal->get_completed_signal();
 }
 
 Ref<PlayFabResult> PlayFabRuntime::get_last_error() const {

@@ -1,6 +1,5 @@
 #include "playfab.h"
 
-#include "playfab_async_op.h"
 #include "playfab_gamesaves.h"
 #include "playfab_leaderboards.h"
 #include "playfab_result.h"
@@ -131,8 +130,8 @@ Ref<PlayFabLeaderboards> PlayFab::get_leaderboards() const {
     return m_leaderboards;
 }
 
-Ref<PlayFabAsyncOp> PlayFab::sign_in_async(const Variant &p_user_or_local_id, bool p_create_account) {
-    return m_users.is_valid() ? m_users->sign_in_async(p_user_or_local_id, p_create_account) : Ref<PlayFabAsyncOp>();
+Signal PlayFab::sign_in_async(const Variant &p_user_or_local_id, bool p_create_account) {
+    return m_users.is_valid() ? m_users->sign_in_async(p_user_or_local_id, p_create_account) : Signal();
 }
 
 Ref<PlayFabUser> PlayFab::get_user_by_local_id(int64_t p_local_id) const {

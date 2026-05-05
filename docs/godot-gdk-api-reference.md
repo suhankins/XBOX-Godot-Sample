@@ -66,15 +66,15 @@ func _process(_delta):
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `add_default_user_async(allow_guests)` | `GDKAsyncOp` | Silent Xbox sign-in |
-| `add_user_with_ui_async()` | `GDKAsyncOp` | Xbox sign-in with UI prompt |
+| `add_default_user_async()` | `Signal` | Silent Xbox sign-in for a non-guest user |
+| `add_user_with_ui_async()` | `Signal` | Xbox sign-in with UI prompt for another local user or guest-capable picker flow; it does not replace the session primary user |
 | `get_primary_user()` | `GDKUser` | Current primary user (or `null`) |
 | `get_users()` | `Array` | All local users |
-| `check_privilege_async(user, privilege)` | `GDKAsyncOp` | Check user privilege |
-| `resolve_privilege_with_ui_async(user, privilege)` | `GDKAsyncOp` | Resolve privilege with UI |
-| `resolve_issue_with_ui_async(user, url)` | `GDKAsyncOp` | Resolve account issue with UI |
-| `get_gamer_picture_async(user, size)` | `GDKAsyncOp` | Fetch user's profile picture |
-| `get_token_and_signature_async(user, method, url, headers, body, force_refresh)` | `GDKAsyncOp` | Get Xbox Live auth token |
+| `check_privilege_async(user, privilege)` | `Signal` | Check user privilege |
+| `resolve_privilege_with_ui_async(user, privilege)` | `Signal` | Resolve privilege with UI |
+| `resolve_issue_with_ui_async(user, url)` | `Signal` | Resolve account issue with UI |
+| `get_gamer_picture_async(user, size)` | `Signal` | Fetch user's profile picture |
+| `get_token_and_signature_async(user, method, url, headers, body, force_refresh)` | `Signal` | Get Xbox Live auth token |
 
 ### Signals
 
@@ -82,16 +82,15 @@ func _process(_delta):
 |--------|-------------|
 | `user_added(user: GDKUser)` | A new user was added |
 | `user_removed(local_id: int)` | A user was removed |
-| `user_changed(user: GDKUser)` | A user's state changed |
-| `primary_user_changed(user: GDKUser)` | The primary user changed |
+| `user_changed(user: GDKUser, change_kind: String)` | A cached user's Xbox-facing state changed; `change_kind` is `signed_in_again`, `gamertag`, `gamer_picture`, or `privileges` |
+| `primary_user_changed(user: GDKUser)` | The session primary user was established or cleared; later user adds do not promote a different primary |
 
 ### Usage
 
 ```gdscript
 func _ready():
     GDK.users.user_added.connect(_on_user_added)
-    var op = GDK.users.add_default_user_async()
-    var result = await op.completed
+    var result = await GDK.users.add_default_user_async()
     if result.ok:
         print("Signed in: ", result.data.gamertag)
 
@@ -130,14 +129,14 @@ Script-visible wrapper around a local Xbox user.
 
 `GDK.achievements` is a `RefCounted` service object returned by
 `GDK.get_achievements()`. It uses the Achievements Manager pattern
-with dispatch-backed ops.
+with direct-await completion signals.
 
 ### Methods
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `query_player_achievements_async(user)` | `GDKDispatchOp` | Query achievements for a user |
-| `update_achievement_async(user, achievement_id, percent_complete)` | `GDKDispatchOp` | Update achievement progress |
+| `query_player_achievements_async(user)` | `Signal` | Query achievements for a user |
+| `update_achievement_async(user, achievement_id, percent_complete)` | `Signal` | Update achievement progress |
 | `get_cached_achievements(user)` | `Array` | Get cached achievement list |
 
 ### Signals
@@ -151,15 +150,13 @@ with dispatch-backed ops.
 
 ```gdscript
 # Query achievements
-var op = GDK.achievements.query_player_achievements_async(user)
-var result = await op.completed
+var result = await GDK.achievements.query_player_achievements_async(user)
 if result.ok:
     for achievement in GDK.achievements.get_cached_achievements(user):
         print(achievement.name, ": ", achievement.progress_percent, "%")
 
 # Update progress (25% increments)
-var update_op = GDK.achievements.update_achievement_async(user, "1", 25)
-await update_op.completed
+await GDK.achievements.update_achievement_async(user, "1", 25)
 ```
 
 ## `GDKAchievement`
@@ -195,9 +192,9 @@ Script-visible wrapper around a cached achievement.
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `set_presence_async(user, state, rich_presence)` | `GDKAsyncOp` | Set rich presence for a local user |
-| `clear_presence_async(user)` | `GDKAsyncOp` | Clear presence for a local user |
-| `get_presence_async(xuids)` | `GDKAsyncOp` | Query presence records for a list of XUIDs |
+| `set_presence_async(user, state, rich_presence)` | `Signal` | Set rich presence for a local user |
+| `clear_presence_async(user)` | `Signal` | Clear presence for a local user |
+| `get_presence_async(xuids)` | `Signal` | Query presence records for a list of XUIDs |
 | `get_cached_presence(xuid)` | `GDKPresenceRecord` | Get a cached presence record by XUID |
 
 **Notes:**
@@ -215,12 +212,10 @@ Script-visible wrapper around a cached achievement.
 
 ```gdscript
 # Set presence
-var op = GDK.presence.set_presence_async(user, "InGame")
-await op.completed
+await GDK.presence.set_presence_async(user, "InGame")
 
 # Query presence for a list of XUIDs
-var query_op = GDK.presence.get_presence_async(["1234567890123456"])
-var result = await query_op.completed
+var result = await GDK.presence.get_presence_async(["1234567890123456"])
 if result.ok:
     var record = GDK.presence.get_cached_presence("1234567890123456")
     print(record.gamertag, " is ", record.presence_text)
@@ -249,7 +244,7 @@ Script-visible wrapper around a cached Xbox presence record.
 |--------|---------|-------------|
 | `start_social_graph(user)` | `GDKResult` | Start tracking the social graph for a user |
 | `stop_social_graph(user)` | `void` | Stop tracking the social graph for a user |
-| `get_friends_async(user)` | `GDKAsyncOp` | Query the default friends group |
+| `get_friends_async(user)` | `Signal` | Query the default friends group |
 | `create_social_group(user, filter)` | `GDKSocialGroup` | Create a filtered social group |
 | `create_social_group_from_xuids(user, xuids)` | `GDKSocialGroup` | Create a social group from explicit XUIDs |
 | `destroy_social_group(group)` | `void` | Destroy a social group |
@@ -269,8 +264,7 @@ Script-visible wrapper around a cached Xbox presence record.
 GDK.social.social_graph_changed.connect(_on_graph_changed)
 var result = GDK.social.start_social_graph(user)
 if result.ok:
-    var op = GDK.social.get_friends_async(user)
-    var friends_result = await op.completed
+    var friends_result = await GDK.social.get_friends_async(user)
     if friends_result.ok:
         for friend in GDK.social.get_group_users(friends_result.data):
             print(friend.gamertag)
@@ -337,14 +331,14 @@ Namespace for social filter enums.
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `set_activity_async(user, connection_string, join_restriction, max_players, current_players, group_id, allow_cross_platform_join)` | `GDKAsyncOp` | Set the current multiplayer activity for a user |
-| `get_activities_async(user, xuids)` | `GDKAsyncOp` | Fetch activities for a list of XUIDs |
+| `set_activity_async(user, connection_string, join_restriction, max_players, current_players, group_id, allow_cross_platform_join)` | `Signal` | Set the current multiplayer activity for a user |
+| `get_activities_async(user, xuids)` | `Signal` | Fetch activities for a list of XUIDs |
 | `get_cached_activity(xuid)` | `GDKMultiplayerActivityInfo` | Get a cached activity by XUID (or `null`) |
-| `delete_activity_async(user)` | `GDKAsyncOp` | Delete the current user's activity |
-| `send_invites_async(user, xuids, allow_cross_platform_join, connection_string)` | `GDKAsyncOp` | Send invites to the given XUIDs |
-| `show_invite_ui_async(user)` | `GDKAsyncOp` | Show the system invite UI |
+| `delete_activity_async(user)` | `Signal` | Delete the current user's activity |
+| `send_invites_async(user, xuids, allow_cross_platform_join, connection_string)` | `Signal` | Send invites to the given XUIDs |
+| `show_invite_ui_async(user)` | `Signal` | Show the system invite UI |
 | `update_recent_players(user, xuids, encounter_type)` | `GDKResult` | Record recent-player encounters |
-| `flush_recent_players_async(user)` | `GDKAsyncOp` | Flush pending recent-player records |
+| `flush_recent_players_async(user)` | `Signal` | Flush pending recent-player records |
 | `accept_pending_invite(invite_uri)` | `GDKResult` | Parse and accept a pending invite URI |
 
 ### Signals
@@ -361,13 +355,11 @@ Namespace for social filter enums.
 var mpa = GDK.multiplayer_activity
 
 # Set your activity
-var op = mpa.set_activity_async(user, "myserver://connect?session=abc",
+await mpa.set_activity_async(user, "myserver://connect?session=abc",
         "followed", 4, 1)
-await op.completed
 
 # Fetch another player's activity
-var get_op = mpa.get_activities_async(user, [other_xuid])
-var result = await get_op.completed
+var result = await mpa.get_activities_async(user, [other_xuid])
 if result.ok:
     var info = mpa.get_cached_activity(other_xuid)
     print(info.get_connection_string())
@@ -394,28 +386,6 @@ Script-visible wrapper around a cached multiplayer activity snapshot.
 | `get_current_players()` | `int` | Current player count |
 | `get_group_id()` | `String` | Optional group identifier |
 | `get_platform()` | `String` | Platform the activity was set from |
-
-## Async operation types
-
-### `GDKAsyncOp`
-
-One-shot wrapper for `XAsync`-backed requests.
-
-| Member | Type | Description |
-|--------|------|-------------|
-| `completed` | Signal | Emitted once with `GDKResult` |
-| `is_done()` | `bool` | Whether the op has completed |
-| `cancel()` | `bool` | Best-effort cancellation |
-| `get_result()` | `GDKResult` | Result (only valid after completion) |
-
-### `GDKDispatchOp`
-
-One-shot wrapper for dispatch/manager-driven waits (e.g., Achievements
-Manager).
-
-Same surface as `GDKAsyncOp` (`completed`, `is_done()`, `cancel()`,
-`get_result()`), but cancel immediately unregisters from service state and
-completes with a cancelled result.
 
 ### `GDKResult`
 

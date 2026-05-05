@@ -8,9 +8,8 @@
 
 #include "gdk_achievement.h"
 #include "gdk.h"
-#include "gdk_async_op.h"
-#include "gdk_dispatch_op.h"
 #include "gdk_multiplayer_activity.h"
+#include "gdk_pending_signal.h"
 #include "gdk_presence.h"
 #include "gdk_result.h"
 #include "gdk_social.h"
@@ -22,28 +21,38 @@ static GDK *gdk_singleton = nullptr;
 
 namespace {
 
+constexpr const char *GDK_RUNTIME_INITIALIZE_ON_STARTUP_SETTING = "gdk/runtime/initialize_on_startup";
+constexpr bool GDK_RUNTIME_INITIALIZE_ON_STARTUP_DEFAULT = false;
 constexpr const char *GDK_RUNTIME_EMBED_DISPATCH_SETTING = "gdk/runtime/embed_dispatch";
 constexpr bool GDK_RUNTIME_EMBED_DISPATCH_DEFAULT = true;
+constexpr const char *GDK_RUNTIME_AUTO_ADD_PRIMARY_USER_SETTING = "gdk/runtime/auto_add_primary_user";
+constexpr bool GDK_RUNTIME_AUTO_ADD_PRIMARY_USER_DEFAULT = false;
 
-void register_gdk_project_settings() {
+void register_bool_setting(const char *name, bool default_value) {
     ProjectSettings *project_settings = ProjectSettings::get_singleton();
     if (project_settings == nullptr) {
         return;
     }
 
-    if (!project_settings->has_setting(GDK_RUNTIME_EMBED_DISPATCH_SETTING)) {
-        project_settings->set_setting(GDK_RUNTIME_EMBED_DISPATCH_SETTING, GDK_RUNTIME_EMBED_DISPATCH_DEFAULT);
+    if (!project_settings->has_setting(name)) {
+        project_settings->set_setting(name, default_value);
     }
 
-    project_settings->set_initial_value(GDK_RUNTIME_EMBED_DISPATCH_SETTING, GDK_RUNTIME_EMBED_DISPATCH_DEFAULT);
-    project_settings->set_as_basic(GDK_RUNTIME_EMBED_DISPATCH_SETTING, true);
+    project_settings->set_initial_value(name, default_value);
+    project_settings->set_as_basic(name, true);
 
     Dictionary setting_info;
-    setting_info["name"] = GDK_RUNTIME_EMBED_DISPATCH_SETTING;
+    setting_info["name"] = name;
     setting_info["type"] = Variant::BOOL;
     setting_info["hint"] = PROPERTY_HINT_NONE;
     setting_info["hint_string"] = "";
     project_settings->add_property_info(setting_info);
+}
+
+void register_gdk_project_settings() {
+    register_bool_setting(GDK_RUNTIME_INITIALIZE_ON_STARTUP_SETTING, GDK_RUNTIME_INITIALIZE_ON_STARTUP_DEFAULT);
+    register_bool_setting(GDK_RUNTIME_EMBED_DISPATCH_SETTING, GDK_RUNTIME_EMBED_DISPATCH_DEFAULT);
+    register_bool_setting(GDK_RUNTIME_AUTO_ADD_PRIMARY_USER_SETTING, GDK_RUNTIME_AUTO_ADD_PRIMARY_USER_DEFAULT);
 }
 
 bool is_embed_dispatch_enabled() {
@@ -73,8 +82,7 @@ void initialize_gdk_extension(ModuleInitializationLevel p_level) {
     if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
         ClassDB::register_abstract_class<GDK>();
         ClassDB::register_class<GDKResult>();
-        ClassDB::register_class<GDKAsyncOp>();
-        ClassDB::register_class<GDKDispatchOp>();
+        ClassDB::register_internal_class<GDKPendingSignal>();
         ClassDB::register_class<GDKUser>();
         ClassDB::register_class<GDKUsers>();
         ClassDB::register_class<GDKAchievement>();

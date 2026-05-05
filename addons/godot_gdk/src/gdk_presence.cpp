@@ -8,11 +8,11 @@
 #include <vector>
 
 #include "gdk.h"
-#include "gdk_async_op.h"
+#include "gdk_pending_signal.h"
 #include "gdk_result.h"
 #include "gdk_runtime.h"
+#include "gdk_signal_xasync_context.h"
 #include "gdk_user.h"
-#include "gdk_xasync_context.h"
 #include "gdk_xbox_services.h"
 
 namespace godot {
@@ -182,30 +182,17 @@ bool _try_parse_xuid(const String &p_xuid, uint64_t *r_xuid) {
     return true;
 }
 
-Ref<GDKAsyncOp> _make_presence_error_op(
-        GDK *p_owner,
+Signal _make_presence_error_signal(
         GDKRuntime *p_runtime,
         HRESULT p_hresult,
         const String &p_code,
         const String &p_message,
         const Variant &p_data = Variant()) {
-    if (p_owner != nullptr) {
-        return p_owner->make_async_error_op(p_hresult, p_code, p_message, p_data);
-    }
-
-    Ref<GDKResult> result = GDKResult::error_result(p_hresult, p_code, p_message, p_data);
-    if (p_runtime != nullptr) {
-        p_runtime->set_last_error(result);
-        return p_runtime->make_completed_async_op(result);
-    }
-
-    Ref<GDKAsyncOp> op;
-    op.instantiate();
-    op->complete(result);
-    return op;
+    ERR_FAIL_NULL_V(p_runtime, Signal());
+    return p_runtime->make_error_signal(p_hresult, p_code, p_message, p_data);
 }
 
-class SetPresenceAsyncContext final : public GDKXAsyncContext {
+class SetPresenceAsyncContext final : public GDKSignalXAsyncContext {
     GDKPresence *m_presence = nullptr;
     Ref<GDKUser> m_user;
     XblContextHandle m_context = nullptr;
@@ -221,10 +208,10 @@ protected:
     void finalize(XAsyncBlock *p_async_block) override {
         Ref<GDKResult> result;
 
-        if (get_runtime()->is_shutting_down() || get_op()->was_cancel_requested()) {
+        if (get_runtime()->is_shutting_down() || get_pending_signal()->was_cancel_requested()) {
             result = GDKResult::cancelled("Presence update cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -232,13 +219,13 @@ protected:
         if (result_hr == E_ABORT) {
             result = GDKResult::cancelled("Presence update cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
         if (FAILED(result_hr)) {
             result = GDKResult::hresult_error(result_hr, "Failed to update presence.", "presence_update_failed");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -259,7 +246,7 @@ protected:
         if (!m_presence_id.is_empty()) {
             data["presence_id"] = m_presence_id;
         }
-        get_op()->complete(GDKResult::ok_result(data));
+        get_pending_signal()->complete(GDKResult::ok_result(data));
     }
 
 public:
@@ -267,13 +254,13 @@ public:
             GDKPresence *p_presence,
             const Ref<GDKUser> &p_user,
             GDKRuntime *p_runtime,
-            const Ref<GDKAsyncOp> &p_op,
+            const Ref<GDKPendingSignal> &p_pending_signal,
             XblContextHandle p_context,
             bool p_is_active,
             const String &p_scid,
             const String &p_presence_id,
             const Array &p_token_ids) :
-            GDKXAsyncContext(p_runtime, p_op),
+            GDKSignalXAsyncContext(p_runtime, p_pending_signal),
             m_presence(p_presence),
             m_user(p_user),
             m_context(p_context),
@@ -319,7 +306,7 @@ public:
     }
 };
 
-class GetPresenceAsyncContext final : public GDKXAsyncContext {
+class GetPresenceAsyncContext final : public GDKSignalXAsyncContext {
     GDKPresence *m_presence = nullptr;
     XblContextHandle m_context = nullptr;
     std::vector<uint64_t> m_xuids;
@@ -328,10 +315,10 @@ protected:
     void finalize(XAsyncBlock *p_async_block) override {
         Ref<GDKResult> result;
 
-        if (get_runtime()->is_shutting_down() || get_op()->was_cancel_requested()) {
+        if (get_runtime()->is_shutting_down() || get_pending_signal()->was_cancel_requested()) {
             result = GDKResult::cancelled("Presence query cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -342,13 +329,13 @@ protected:
             if (result_hr == E_ABORT) {
                 result = GDKResult::cancelled("Presence query cancelled.");
                 get_runtime()->set_last_error(result);
-                get_op()->complete(result);
+                get_pending_signal()->complete(result);
                 return;
             }
             if (FAILED(result_hr)) {
                 result = GDKResult::hresult_error(result_hr, "Failed to retrieve the presence query result.", "presence_result_failed");
                 get_runtime()->set_last_error(result);
-                get_op()->complete(result);
+                get_pending_signal()->complete(result);
                 return;
             }
 
@@ -359,7 +346,7 @@ protected:
             if (FAILED(result_hr)) {
                 result = GDKResult::hresult_error(result_hr, "Failed to translate a presence record.", "presence_record_translate_failed");
                 get_runtime()->set_last_error(result);
-                get_op()->complete(result);
+                get_pending_signal()->complete(result);
                 return;
             }
 
@@ -371,13 +358,13 @@ protected:
             if (result_hr == E_ABORT) {
                 result = GDKResult::cancelled("Presence query cancelled.");
                 get_runtime()->set_last_error(result);
-                get_op()->complete(result);
+                get_pending_signal()->complete(result);
                 return;
             }
             if (FAILED(result_hr)) {
                 result = GDKResult::hresult_error(result_hr, "Failed to retrieve the presence query result count.", "presence_result_count_failed");
                 get_runtime()->set_last_error(result);
-                get_op()->complete(result);
+                get_pending_signal()->complete(result);
                 return;
             }
 
@@ -387,13 +374,13 @@ protected:
                 if (result_hr == E_ABORT) {
                     result = GDKResult::cancelled("Presence query cancelled.");
                     get_runtime()->set_last_error(result);
-                    get_op()->complete(result);
+                    get_pending_signal()->complete(result);
                     return;
                 }
                 if (FAILED(result_hr)) {
                     result = GDKResult::hresult_error(result_hr, "Failed to retrieve presence records.", "presence_results_failed");
                     get_runtime()->set_last_error(result);
-                    get_op()->complete(result);
+                    get_pending_signal()->complete(result);
                     return;
                 }
             }
@@ -419,7 +406,7 @@ protected:
 
                     result = GDKResult::hresult_error(result_hr, "Failed to translate a presence record.", "presence_record_translate_failed");
                     get_runtime()->set_last_error(result);
-                    get_op()->complete(result);
+                    get_pending_signal()->complete(result);
                     return;
                 }
 
@@ -429,17 +416,17 @@ protected:
         }
 
         get_runtime()->clear_last_error();
-        get_op()->complete(GDKResult::ok_result(records));
+        get_pending_signal()->complete(GDKResult::ok_result(records));
     }
 
 public:
     GetPresenceAsyncContext(
             GDKPresence *p_presence,
             GDKRuntime *p_runtime,
-            const Ref<GDKAsyncOp> &p_op,
+            const Ref<GDKPendingSignal> &p_pending_signal,
             XblContextHandle p_context,
             std::vector<uint64_t> p_xuids) :
-            GDKXAsyncContext(p_runtime, p_op),
+            GDKSignalXAsyncContext(p_runtime, p_pending_signal),
             m_presence(p_presence),
             m_context(p_context),
             m_xuids(std::move(p_xuids)) {}
@@ -581,23 +568,23 @@ void GDKPresence::shutdown() {
     m_cached_presence.clear();
 }
 
-Ref<GDKAsyncOp> GDKPresence::set_presence_async(const Ref<GDKUser> &p_user, const String &p_state, const Dictionary &p_rich_presence) {
+Signal GDKPresence::set_presence_async(const Ref<GDKUser> &p_user, const String &p_state, const Dictionary &p_rich_presence) {
     GDKRuntime *runtime = _get_runtime();
     if (runtime == nullptr || !runtime->is_initialized()) {
-        return _make_error_async_op(E_FAIL, "not_initialized", "GDK is not initialized. Call GDK.initialize() first.");
+        return _make_error_signal(E_FAIL, "not_initialized", "GDK is not initialized. Call GDK.initialize() first.");
     }
     if (!p_user.is_valid() || p_user->get_handle() == nullptr) {
-        return _make_error_async_op(E_INVALIDARG, "invalid_user", "A signed-in GDKUser is required for presence.");
+        return _make_error_signal(E_INVALIDARG, "invalid_user", "A signed-in GDKUser is required for presence.");
     }
 
     const String presence_id = p_state.strip_edges();
     if (presence_id.is_empty()) {
-        return _make_error_async_op(E_INVALIDARG, "invalid_presence_state", "Presence updates require a non-empty state string.");
+        return _make_error_signal(E_INVALIDARG, "invalid_presence_state", "Presence updates require a non-empty state string.");
     }
 
     GDKXboxServices *xbox_services = _get_xbox_services();
     if (xbox_services == nullptr || !xbox_services->is_initialized()) {
-        return _make_error_async_op(E_FAIL, "xbox_services_not_initialized", "Xbox services are unavailable. Ensure the title has a TitleId before using presence.");
+        return _make_error_signal(E_FAIL, "xbox_services_not_initialized", "Xbox services are unavailable. Ensure the title has a TitleId before using presence.");
     }
 
     String scid = xbox_services->get_scid();
@@ -605,7 +592,7 @@ Ref<GDKAsyncOp> GDKPresence::set_presence_async(const Ref<GDKUser> &p_user, cons
         scid = String(p_rich_presence["scid"]).strip_edges();
     }
     if (scid.is_empty()) {
-        return _make_error_async_op(E_FAIL, "missing_presence_scid", "Presence updates require a non-empty SCID.");
+        return _make_error_signal(E_FAIL, "missing_presence_scid", "Presence updates require a non-empty SCID.");
     }
 
     Array token_ids;
@@ -619,7 +606,7 @@ Ref<GDKAsyncOp> GDKPresence::set_presence_async(const Ref<GDKUser> &p_user, cons
                 token_ids.push_back(packed_tokens[i]);
             }
         } else {
-            return _make_error_async_op(E_INVALIDARG, "invalid_presence_token_ids", "rich_presence.token_ids must be an Array or PackedStringArray.");
+            return _make_error_signal(E_INVALIDARG, "invalid_presence_token_ids", "rich_presence.token_ids must be an Array or PackedStringArray.");
         }
     } else if (p_rich_presence.has("tokens")) {
         Variant token_value = p_rich_presence["tokens"];
@@ -631,24 +618,22 @@ Ref<GDKAsyncOp> GDKPresence::set_presence_async(const Ref<GDKUser> &p_user, cons
                 token_ids.push_back(packed_tokens[i]);
             }
         } else {
-            return _make_error_async_op(E_INVALIDARG, "invalid_presence_token_ids", "rich_presence.tokens must be an Array or PackedStringArray.");
+            return _make_error_signal(E_INVALIDARG, "invalid_presence_token_ids", "rich_presence.tokens must be an Array or PackedStringArray.");
         }
     }
 
-    Ref<GDKAsyncOp> op;
-    op.instantiate();
-    runtime->retain_op(op);
+    Ref<GDKPendingSignal> pending_signal = runtime->make_pending_signal();
 
     XblContextHandle context = nullptr;
     HRESULT hr = xbox_services->duplicate_context_for_user(p_user, &context);
     if (FAILED(hr)) {
         Ref<GDKResult> result = GDKResult::hresult_error(hr, "Failed to resolve the Xbox services context for the presence update.", "presence_context_failed");
         runtime->set_last_error(result);
-        op->complete(result);
-        return op;
+        pending_signal->complete_deferred(result);
+        return pending_signal->get_completed_signal();
     }
 
-    auto *context_state = new SetPresenceAsyncContext(this, p_user, runtime, op, context, true, scid, presence_id, token_ids);
+    auto *context_state = new SetPresenceAsyncContext(this, p_user, runtime, pending_signal, context, true, scid, presence_id, token_ids);
     context_state->bind_cancel_handler();
 
     hr = XblPresenceSetPresenceAsync(
@@ -657,46 +642,43 @@ Ref<GDKAsyncOp> GDKPresence::set_presence_async(const Ref<GDKUser> &p_user, cons
             context_state->get_rich_presence_ids(),
             context_state->get_async_block());
     if (FAILED(hr)) {
-        op->clear_cancel_handler();
+        pending_signal->clear_cancel_handler();
         delete context_state;
 
         Ref<GDKResult> result = GDKResult::hresult_error(hr, "Failed to start the presence update request.", "presence_update_start_failed");
         runtime->set_last_error(result);
-        op->complete(result);
-        return op;
+        pending_signal->complete_deferred(result);
     }
 
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
-Ref<GDKAsyncOp> GDKPresence::clear_presence_async(const Ref<GDKUser> &p_user) {
+Signal GDKPresence::clear_presence_async(const Ref<GDKUser> &p_user) {
     GDKRuntime *runtime = _get_runtime();
     if (runtime == nullptr || !runtime->is_initialized()) {
-        return _make_error_async_op(E_FAIL, "not_initialized", "GDK is not initialized. Call GDK.initialize() first.");
+        return _make_error_signal(E_FAIL, "not_initialized", "GDK is not initialized. Call GDK.initialize() first.");
     }
     if (!p_user.is_valid() || p_user->get_handle() == nullptr) {
-        return _make_error_async_op(E_INVALIDARG, "invalid_user", "A signed-in GDKUser is required for presence.");
+        return _make_error_signal(E_INVALIDARG, "invalid_user", "A signed-in GDKUser is required for presence.");
     }
 
     GDKXboxServices *xbox_services = _get_xbox_services();
     if (xbox_services == nullptr || !xbox_services->is_initialized()) {
-        return _make_error_async_op(E_FAIL, "xbox_services_not_initialized", "Xbox services are unavailable. Ensure the title has a TitleId before using presence.");
+        return _make_error_signal(E_FAIL, "xbox_services_not_initialized", "Xbox services are unavailable. Ensure the title has a TitleId before using presence.");
     }
 
-    Ref<GDKAsyncOp> op;
-    op.instantiate();
-    runtime->retain_op(op);
+    Ref<GDKPendingSignal> pending_signal = runtime->make_pending_signal();
 
     XblContextHandle context = nullptr;
     HRESULT hr = xbox_services->duplicate_context_for_user(p_user, &context);
     if (FAILED(hr)) {
         Ref<GDKResult> result = GDKResult::hresult_error(hr, "Failed to resolve the Xbox services context for the presence update.", "presence_context_failed");
         runtime->set_last_error(result);
-        op->complete(result);
-        return op;
+        pending_signal->complete_deferred(result);
+        return pending_signal->get_completed_signal();
     }
 
-    auto *context_state = new SetPresenceAsyncContext(this, p_user, runtime, op, context, false, String(), String(), Array());
+    auto *context_state = new SetPresenceAsyncContext(this, p_user, runtime, pending_signal, context, false, String(), String(), Array());
     context_state->bind_cancel_handler();
 
     hr = XblPresenceSetPresenceAsync(
@@ -705,28 +687,27 @@ Ref<GDKAsyncOp> GDKPresence::clear_presence_async(const Ref<GDKUser> &p_user) {
             nullptr,
             context_state->get_async_block());
     if (FAILED(hr)) {
-        op->clear_cancel_handler();
+        pending_signal->clear_cancel_handler();
         delete context_state;
 
         Ref<GDKResult> result = GDKResult::hresult_error(hr, "Failed to start the presence clear request.", "presence_clear_start_failed");
         runtime->set_last_error(result);
-        op->complete(result);
-        return op;
+        pending_signal->complete_deferred(result);
     }
 
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
-Ref<GDKAsyncOp> GDKPresence::get_presence_async(const PackedStringArray &p_xuids) {
+Signal GDKPresence::get_presence_async(const PackedStringArray &p_xuids) {
     GDKRuntime *runtime = _get_runtime();
     if (runtime == nullptr || !runtime->is_initialized()) {
-        return _make_error_async_op(E_FAIL, "not_initialized", "GDK is not initialized. Call GDK.initialize() first.");
+        return _make_error_signal(E_FAIL, "not_initialized", "GDK is not initialized. Call GDK.initialize() first.");
     }
 
     std::vector<uint64_t> xuids;
     Ref<GDKResult> parse_result = _parse_query_xuids(p_xuids, &xuids);
     if (!parse_result->is_ok()) {
-        return _make_error_async_op(
+        return _make_error_signal(
                 static_cast<HRESULT>(parse_result->get_hresult()),
                 parse_result->get_code(),
                 parse_result->get_message());
@@ -734,28 +715,26 @@ Ref<GDKAsyncOp> GDKPresence::get_presence_async(const PackedStringArray &p_xuids
 
     GDKXboxServices *xbox_services = _get_xbox_services();
     if (xbox_services == nullptr || !xbox_services->is_initialized()) {
-        return _make_error_async_op(E_FAIL, "xbox_services_not_initialized", "Xbox services are unavailable. Ensure the title has a TitleId before using presence.");
+        return _make_error_signal(E_FAIL, "xbox_services_not_initialized", "Xbox services are unavailable. Ensure the title has a TitleId before using presence.");
     }
 
     Ref<GDKUser> calling_user = _get_presence_calling_user();
     if (!calling_user.is_valid() || calling_user->get_handle() == nullptr) {
-        return _make_error_async_op(E_FAIL, "presence_requires_primary_user", "Presence queries require a signed-in primary user context.");
+        return _make_error_signal(E_FAIL, "presence_requires_primary_user", "Presence queries require a signed-in primary user context.");
     }
 
-    Ref<GDKAsyncOp> op;
-    op.instantiate();
-    runtime->retain_op(op);
+    Ref<GDKPendingSignal> pending_signal = runtime->make_pending_signal();
 
     XblContextHandle context = nullptr;
     HRESULT hr = xbox_services->duplicate_context_for_user(calling_user, &context);
     if (FAILED(hr)) {
         Ref<GDKResult> result = GDKResult::hresult_error(hr, "Failed to resolve the Xbox services context for the presence query.", "presence_context_failed");
         runtime->set_last_error(result);
-        op->complete(result);
-        return op;
+        pending_signal->complete_deferred(result);
+        return pending_signal->get_completed_signal();
     }
 
-    auto *context_state = new GetPresenceAsyncContext(this, runtime, op, context, std::move(xuids));
+    auto *context_state = new GetPresenceAsyncContext(this, runtime, pending_signal, context, std::move(xuids));
     context_state->bind_cancel_handler();
 
     if (context_state->get_xuids().size() == 1) {
@@ -775,16 +754,15 @@ Ref<GDKAsyncOp> GDKPresence::get_presence_async(const PackedStringArray &p_xuids
     }
 
     if (FAILED(hr)) {
-        op->clear_cancel_handler();
+        pending_signal->clear_cancel_handler();
         delete context_state;
 
         Ref<GDKResult> result = GDKResult::hresult_error(hr, "Failed to start the presence query.", "presence_query_start_failed");
         runtime->set_last_error(result);
-        op->complete(result);
-        return op;
+        pending_signal->complete_deferred(result);
     }
 
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
 Ref<GDKPresenceRecord> GDKPresence::get_cached_presence(const String &p_xuid) const {
@@ -833,8 +811,8 @@ GDKXboxServices *GDKPresence::_get_xbox_services() const {
     return m_owner != nullptr ? m_owner->get_xbox_services() : nullptr;
 }
 
-Ref<GDKAsyncOp> GDKPresence::_make_error_async_op(HRESULT p_hresult, const String &p_code, const String &p_message, const Variant &p_data) const {
-    return _make_presence_error_op(m_owner, _get_runtime(), p_hresult, p_code, p_message, p_data);
+Signal GDKPresence::_make_error_signal(HRESULT p_hresult, const String &p_code, const String &p_message, const Variant &p_data) const {
+    return _make_presence_error_signal(_get_runtime(), p_hresult, p_code, p_message, p_data);
 }
 
 Ref<GDKUser> GDKPresence::_get_presence_calling_user() const {

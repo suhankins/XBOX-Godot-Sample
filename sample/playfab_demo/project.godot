@@ -21,7 +21,7 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-GDKBootstrap="*res://gdk_bootstrap.gd"
+GDKBootstrap="*res://addons/godot_gdk/runtime/gdk_bootstrap.gd"
 GameInputBootstrap="*res://addons/godot_gameinput/runtime/gameinput_bootstrap.gd"
 
 [editor_plugins]
@@ -30,7 +30,9 @@ enabled=PackedStringArray("res://addons/godot_gameinput/plugin.cfg", "res://addo
 
 [gdk]
 
+runtime/initialize_on_startup=true
 runtime/embed_dispatch=true
+runtime/auto_add_primary_user=true
 
 [playfab]
 

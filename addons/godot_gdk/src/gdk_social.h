@@ -25,8 +25,7 @@
 namespace godot {
 
 class GDK;
-class GDKAsyncOp;
-class GDKDispatchOp;
+class GDKPendingSignal;
 class GDKResult;
 class GDKRuntime;
 class GDKUser;
@@ -167,7 +166,7 @@ class GDKSocial : public RefCounted {
     struct PendingFriendsOp {
         XUserLocalId local_id = {};
         XblSocialManagerUserGroupHandle group_handle = nullptr;
-        Ref<GDKDispatchOp> op;
+        Ref<GDKPendingSignal> request;
     };
 
     GDK *m_owner = nullptr;
@@ -180,7 +179,8 @@ class GDKSocial : public RefCounted {
     GDKRuntime *_get_runtime() const;
     GDKXboxServices *_get_xbox_services() const;
     GDKPresence *_get_presence_service() const;
-    Ref<GDKDispatchOp> _make_error_dispatch_op(HRESULT p_hresult, const String &p_code, const String &p_message) const;
+    Signal _make_completed_signal(const Ref<GDKResult> &p_result) const;
+    Signal _make_error_signal(HRESULT p_hresult, const String &p_code, const String &p_message) const;
     Ref<GDKResult> _ensure_local_user_state(const Ref<GDKUser> &p_user, LocalUserState **r_state, bool p_auto_start);
     LocalUserState *_find_local_user_state(XUserLocalId p_local_id);
     Ref<GDKSocialGroup> _find_group_by_handle(XblSocialManagerUserGroupHandle p_group_handle) const;
@@ -191,7 +191,7 @@ class GDKSocial : public RefCounted {
     void _complete_pending_friend_ops(XblSocialManagerUserGroupHandle p_group_handle);
     void _fail_pending_friend_ops(XUserLocalId p_local_id, const Ref<GDKResult> &p_result);
     void _fail_pending_friend_ops_for_group(XblSocialManagerUserGroupHandle p_group_handle, const Ref<GDKResult> &p_result);
-    void _cancel_pending_friend_op(GDKDispatchOp *p_op);
+    void _cancel_pending_friend_signal(GDKPendingSignal *p_request);
     void _destroy_group_internal(const Ref<GDKSocialGroup> &p_group, bool p_remove_from_collection);
     void _erase_local_user_state(XUserLocalId p_local_id);
     void _emit_filter_group_updates(XUserLocalId p_local_id);
@@ -209,7 +209,7 @@ public:
 
     Ref<GDKResult> start_social_graph(const Ref<GDKUser> &p_user);
     void stop_social_graph(const Ref<GDKUser> &p_user);
-    Ref<GDKAsyncOp> get_friends_async(const Ref<GDKUser> &p_user);
+    Signal get_friends_async(const Ref<GDKUser> &p_user);
     Ref<GDKSocialGroup> create_social_group(const Ref<GDKUser> &p_user, const Ref<GDKSocialFilter> &p_filter = Ref<GDKSocialFilter>());
     Ref<GDKSocialGroup> create_social_group_from_xuids(const Ref<GDKUser> &p_user, const PackedStringArray &p_xuids);
     void destroy_social_group(const Ref<GDKSocialGroup> &p_group);

@@ -24,6 +24,31 @@ func _init(toolchain: RefCounted) -> void:
 ##   updcompat   : int     — /updcompat level (1, 2, or 3; default 3)
 func pack(source_dir: String, map_file: String, output_dir: String,
 		options: Dictionary = {}) -> Dictionary:
+	var args = build_pack_args(source_dir, map_file, output_dir, options)
+	print("[GDK Packaging] makepkg ", " ".join(args))
+	return _toolchain.execute_tool(_toolchain.get_makepkg_path(), args)
+
+
+# ── genmap ──────────────────────────────────────────────────────────────────
+
+## Generates a mapping XML file from a content directory.
+func genmap(content_dir: String, output_file: String) -> Dictionary:
+	var args = build_genmap_args(content_dir, output_file)
+	print("[GDK Packaging] makepkg ", " ".join(args))
+	return _toolchain.execute_tool(_toolchain.get_makepkg_path(), args)
+
+
+# ── validate ────────────────────────────────────────────────────────────────
+
+## Validates a package layout without creating it.
+func validate(map_file: String, source_dir: String, output_dir: String) -> Dictionary:
+	var args = build_validate_args(map_file, source_dir, output_dir)
+	print("[GDK Packaging] makepkg ", " ".join(args))
+	return _toolchain.execute_tool(_toolchain.get_makepkg_path(), args)
+
+
+func build_pack_args(source_dir: String, map_file: String, output_dir: String,
+		options: Dictionary = {}) -> PackedStringArray:
 	var args: PackedStringArray = ["pack"]
 	args.append("/f")
 	args.append(map_file)
@@ -41,7 +66,6 @@ func pack(source_dir: String, map_file: String, output_dir: String,
 		args.append("/productid")
 		args.append(str(options["product_id"]))
 
-	# Encryption: /lk takes precedence over /l
 	if options.has("encrypt_key") and options["encrypt_key"] != "":
 		args.append("/lk")
 		args.append(str(options["encrypt_key"]))
@@ -52,33 +76,22 @@ func pack(source_dir: String, map_file: String, output_dir: String,
 		args.append("/updcompat")
 		args.append(str(options["updcompat"]))
 
-	print("[GDK Packaging] makepkg ", " ".join(args))
-	return _toolchain.execute_tool(_toolchain.get_makepkg_path(), args)
+	return args
 
 
-# ── genmap ──────────────────────────────────────────────────────────────────
-
-## Generates a mapping XML file from a content directory.
-func genmap(content_dir: String, output_file: String) -> Dictionary:
-	var args: PackedStringArray = [
+func build_genmap_args(content_dir: String, output_file: String) -> PackedStringArray:
+	return PackedStringArray([
 		"genmap",
 		"/f", output_file,
 		"/d", content_dir,
-	]
-	print("[GDK Packaging] makepkg ", " ".join(args))
-	return _toolchain.execute_tool(_toolchain.get_makepkg_path(), args)
+	])
 
 
-# ── validate ────────────────────────────────────────────────────────────────
-
-## Validates a package layout without creating it.
-func validate(map_file: String, source_dir: String, output_dir: String) -> Dictionary:
-	var args: PackedStringArray = [
+func build_validate_args(map_file: String, source_dir: String, output_dir: String) -> PackedStringArray:
+	return PackedStringArray([
 		"validate",
 		"/f", map_file,
 		"/d", source_dir,
 		"/pd", output_dir,
 		"/pc",
-	]
-	print("[GDK Packaging] makepkg ", " ".join(args))
-	return _toolchain.execute_tool(_toolchain.get_makepkg_path(), args)
+	])

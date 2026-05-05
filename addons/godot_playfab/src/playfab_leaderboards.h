@@ -9,7 +9,7 @@
 namespace godot {
 
 class PlayFab;
-class PlayFabAsyncOp;
+class PlayFabPendingSignal;
 class PlayFabResult;
 class PlayFabRuntime;
 class PlayFabUser;
@@ -27,24 +27,24 @@ protected:
 public:
     void set_owner(PlayFab *p_owner);
 
-    Ref<PlayFabAsyncOp> submit_score_async(
+    Signal submit_score_async(
             const Ref<PlayFabUser> &p_user,
             const String &p_leaderboard_name,
             int64_t p_score,
             const Array &p_additional_scores = Array(),
             const String &p_metadata = String());
-    Ref<PlayFabAsyncOp> get_leaderboard_async(
+    Signal get_leaderboard_async(
             const Ref<PlayFabUser> &p_user,
             const String &p_leaderboard_name,
             int64_t p_start_position = 1,
             int64_t p_page_size = 10,
             int64_t p_version = -1);
-    Ref<PlayFabAsyncOp> get_leaderboard_around_user_async(
+    Signal get_leaderboard_around_user_async(
             const Ref<PlayFabUser> &p_user,
             const String &p_leaderboard_name,
             int64_t p_max_surrounding_entries = 10,
             int64_t p_version = -1);
-    Ref<PlayFabAsyncOp> get_friend_leaderboard_async(
+    Signal get_friend_leaderboard_async(
             const Ref<PlayFabUser> &p_user,
             const String &p_leaderboard_name,
             bool p_include_xbox_friends = true,

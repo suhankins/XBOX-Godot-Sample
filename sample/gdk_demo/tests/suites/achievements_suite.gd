@@ -31,11 +31,11 @@ func run(context) -> void:
 		context.log_skip("Achievements runtime behavior", init_result.message)
 		return
 
-	var sign_in = context.ensure_primary_user()
-	var sign_in_op = sign_in["op"]
+	var sign_in = await context.ensure_primary_user()
+	var sign_in_signal = sign_in["signal"]
 	var sign_in_result = sign_in["result"]
 	var user = sign_in["user"]
-	if sign_in_op != null and sign_in_result == null:
+	if typeof(sign_in_signal) == TYPE_SIGNAL and sign_in_result == null:
 		context.log_fail("Default-user flow for achievements completes", "timed out waiting for a signed-in user")
 		context.reset_runtime()
 		return
@@ -51,13 +51,11 @@ func run(context) -> void:
 
 	context.assert_true(achievements.get_cached_achievements(user) is Array, "get_cached_achievements(user) returns Array before the first query")
 
-	var query_op = achievements.query_player_achievements_async(user)
-	context.assert_not_null(query_op, "query_player_achievements_async() returns GDKDispatchOp")
-	if query_op != null:
-		context.assert_object_is(query_op, "GDKDispatchOp", "query_player_achievements_async() uses dispatch-backed op type")
-		var query_result = context.wait_for_op(query_op, 8000)
+	var query_signal = achievements.query_player_achievements_async(user)
+	context.assert_true(typeof(query_signal) == TYPE_SIGNAL, "query_player_achievements_async() returns completion Signal")
+	if typeof(query_signal) == TYPE_SIGNAL:
+		var query_result = await context.wait_for_signal(query_signal, 8000)
 		if query_result == null:
-			query_op.cancel()
 			context.log_skip("query_player_achievements_async()", "Timed out waiting for Achievements Manager to finish the query.")
 			context.reset_runtime()
 			return
@@ -72,15 +70,11 @@ func run(context) -> void:
 				if queried_achievements.size() > 0:
 					context.assert_object_is(queried_achievements[0], "GDKAchievement", "achievement query returns GDKAchievement wrappers")
 
-			var invalid_id_op = achievements.update_achievement_async(user, "", 25)
-			context.assert_not_null(invalid_id_op, "update_achievement_async() returns GDKDispatchOp for a signed-in user")
-			if invalid_id_op != null:
-				context.assert_result_error(invalid_id_op.get_result(), "invalid_achievement_id", "update_achievement_async() rejects blank achievement ids")
+			var invalid_id_signal = achievements.update_achievement_async(user, "", 25)
+			await context.assert_signal_result_error(invalid_id_signal, "invalid_achievement_id", "update_achievement_async() rejects blank achievement ids")
 
-			var invalid_progress_op = achievements.update_achievement_async(user, "test-achievement", 0)
-			context.assert_not_null(invalid_progress_op, "update_achievement_async() validates achievement progress")
-			if invalid_progress_op != null:
-				context.assert_result_error(invalid_progress_op.get_result(), "invalid_achievement_progress", "update_achievement_async() rejects progress outside 1-100")
+			var invalid_progress_signal = achievements.update_achievement_async(user, "test-achievement", 0)
+			await context.assert_signal_result_error(invalid_progress_signal, "invalid_achievement_progress", "update_achievement_async() rejects progress outside 1-100")
 		else:
 			context.assert_true(query_result.code.length() > 0, "achievement query failure exposes an error code")
 			context.assert_true(query_result.message.length() > 0, "achievement query failure exposes an error message")

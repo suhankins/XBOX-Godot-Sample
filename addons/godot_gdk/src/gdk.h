@@ -19,8 +19,6 @@
 
 namespace godot {
 
-class GDKAsyncOp;
-class GDKDispatchOp;
 class GDKResult;
 class GDKRuntime;
 class GDKXboxServices;
@@ -61,8 +59,6 @@ public:
 
     GDKRuntime *get_runtime() const;
     GDKXboxServices *get_xbox_services() const;
-    Ref<GDKAsyncOp> make_async_error_op(HRESULT p_hresult, const String &p_code, const String &p_message, const Variant &p_data = Variant()) const;
-    Ref<GDKDispatchOp> make_dispatch_error_op(HRESULT p_hresult, const String &p_code, const String &p_message, const Variant &p_data = Variant()) const;
     void emit_runtime_error(const Ref<GDKResult> &p_result);
     void notify_user_removed(const Ref<GDKUser> &p_user);
 };

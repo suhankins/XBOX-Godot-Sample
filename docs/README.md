@@ -40,8 +40,8 @@ for Partner Center configuration.
   build flow, and how Godot loads the extension
 - [**Native Runtime**](godot-gdk-native-runtime.md) — runtime structure,
   services, and request flow
-- [**Async System**](godot-gdk-async-system.md) — shared queue, XAsync bridge,
-  dispatch ops, and cancellation
+- [**Async System**](godot-gdk-async-system.md) — shared queue, pending-signal
+  helpers, XAsync bridge, and cancellation
 - [**Editor Tools**](godot-gdk-editor-tools.md) — editor plugin, setup panel,
   and export platform
 - [**Sample and Tests**](godot-gdk-sample-and-tests.md) — sample architecture

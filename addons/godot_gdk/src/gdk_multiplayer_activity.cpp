@@ -9,11 +9,11 @@
 #include <XGameUI.h>
 
 #include "gdk.h"
-#include "gdk_async_op.h"
+#include "gdk_pending_signal.h"
 #include "gdk_result.h"
 #include "gdk_runtime.h"
+#include "gdk_signal_xasync_context.h"
 #include "gdk_user.h"
-#include "gdk_xasync_context.h"
 #include "gdk_xbox_services.h"
 
 namespace godot {
@@ -91,7 +91,7 @@ Ref<GDKResult> _parse_xuids(
     return GDKResult::ok_result();
 }
 
-class MultiplayerActivityXAsyncContext : public GDKXAsyncContext {
+class MultiplayerActivityXAsyncContext : public GDKSignalXAsyncContext {
 protected:
     GDKMultiplayerActivity *m_service = nullptr;
     XblContextHandle m_context = nullptr;
@@ -100,9 +100,9 @@ public:
     MultiplayerActivityXAsyncContext(
             GDKMultiplayerActivity *p_service,
             GDKRuntime *p_runtime,
-            const Ref<GDKAsyncOp> &p_op,
+            const Ref<GDKPendingSignal> &p_pending_signal,
             XblContextHandle p_context) :
-            GDKXAsyncContext(p_runtime, p_op),
+            GDKSignalXAsyncContext(p_runtime, p_pending_signal),
             m_service(p_service),
             m_context(p_context) {}
 
@@ -130,10 +130,10 @@ protected:
     void finalize(XAsyncBlock *p_async_block) override {
         Ref<GDKResult> result;
 
-        if (get_runtime()->is_shutting_down() || get_op()->was_cancel_requested()) {
+        if (get_runtime()->is_shutting_down() || get_pending_signal()->was_cancel_requested()) {
             result = GDKResult::cancelled("Multiplayer activity update cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -141,7 +141,7 @@ protected:
         if (result_hr == E_ABORT) {
             result = GDKResult::cancelled("Multiplayer activity update cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -151,7 +151,7 @@ protected:
                     "Failed to set the multiplayer activity.",
                     "multiplayer_activity_set_result_failed");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -169,14 +169,14 @@ protected:
         m_service->emit_activities_updated_internal({ m_local_xuid });
 
         get_runtime()->clear_last_error();
-        get_op()->complete(GDKResult::ok_result(activity));
+        get_pending_signal()->complete(GDKResult::ok_result(activity));
     }
 
 public:
     SetActivityAsyncContext(
             GDKMultiplayerActivity *p_service,
             GDKRuntime *p_runtime,
-            const Ref<GDKAsyncOp> &p_op,
+            const Ref<GDKPendingSignal> &p_pending_signal,
             XblContextHandle p_context,
             const String &p_local_xuid,
             const String &p_connection_string,
@@ -184,7 +184,7 @@ public:
             int64_t p_max_players,
             int64_t p_current_players,
             const String &p_group_id) :
-            MultiplayerActivityXAsyncContext(p_service, p_runtime, p_op, p_context),
+            MultiplayerActivityXAsyncContext(p_service, p_runtime, p_pending_signal, p_context),
             m_local_xuid(p_local_xuid),
             m_connection_string(p_connection_string),
             m_join_restriction(p_join_restriction),
@@ -198,10 +198,10 @@ protected:
     void finalize(XAsyncBlock *p_async_block) override {
         Ref<GDKResult> result;
 
-        if (get_runtime()->is_shutting_down() || get_op()->was_cancel_requested()) {
+        if (get_runtime()->is_shutting_down() || get_pending_signal()->was_cancel_requested()) {
             result = GDKResult::cancelled("Multiplayer activity query cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -210,7 +210,7 @@ protected:
         if (size_hr == E_ABORT) {
             result = GDKResult::cancelled("Multiplayer activity query cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -220,7 +220,7 @@ protected:
                     "Failed to get the multiplayer activity result size.",
                     "multiplayer_activity_get_result_size_failed");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -237,7 +237,7 @@ protected:
         if (result_hr == E_ABORT) {
             result = GDKResult::cancelled("Multiplayer activity query cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -247,7 +247,7 @@ protected:
                     "Failed to translate the multiplayer activity result.",
                     "multiplayer_activity_get_result_failed");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -265,16 +265,16 @@ protected:
 
         m_service->emit_activities_updated_internal(updated_xuids);
         get_runtime()->clear_last_error();
-        get_op()->complete(GDKResult::ok_result(godot_activities));
+        get_pending_signal()->complete(GDKResult::ok_result(godot_activities));
     }
 
 public:
     GetActivitiesAsyncContext(
             GDKMultiplayerActivity *p_service,
             GDKRuntime *p_runtime,
-            const Ref<GDKAsyncOp> &p_op,
+            const Ref<GDKPendingSignal> &p_pending_signal,
             XblContextHandle p_context) :
-            MultiplayerActivityXAsyncContext(p_service, p_runtime, p_op, p_context) {}
+            MultiplayerActivityXAsyncContext(p_service, p_runtime, p_pending_signal, p_context) {}
 };
 
 class DeleteActivityAsyncContext final : public MultiplayerActivityXAsyncContext {
@@ -284,10 +284,10 @@ protected:
     void finalize(XAsyncBlock *p_async_block) override {
         Ref<GDKResult> result;
 
-        if (get_runtime()->is_shutting_down() || get_op()->was_cancel_requested()) {
+        if (get_runtime()->is_shutting_down() || get_pending_signal()->was_cancel_requested()) {
             result = GDKResult::cancelled("Multiplayer activity delete cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -295,7 +295,7 @@ protected:
         if (result_hr == E_ABORT) {
             result = GDKResult::cancelled("Multiplayer activity delete cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -305,24 +305,24 @@ protected:
                     "Failed to delete the multiplayer activity.",
                     "multiplayer_activity_delete_result_failed");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
         m_service->remove_cached_activity_internal(m_local_xuid);
         m_service->emit_activities_updated_internal({ m_local_xuid });
         get_runtime()->clear_last_error();
-        get_op()->complete(GDKResult::ok_result(m_local_xuid));
+        get_pending_signal()->complete(GDKResult::ok_result(m_local_xuid));
     }
 
 public:
     DeleteActivityAsyncContext(
             GDKMultiplayerActivity *p_service,
             GDKRuntime *p_runtime,
-            const Ref<GDKAsyncOp> &p_op,
+            const Ref<GDKPendingSignal> &p_pending_signal,
             XblContextHandle p_context,
             const String &p_local_xuid) :
-            MultiplayerActivityXAsyncContext(p_service, p_runtime, p_op, p_context),
+            MultiplayerActivityXAsyncContext(p_service, p_runtime, p_pending_signal, p_context),
             m_local_xuid(p_local_xuid) {}
 };
 
@@ -335,10 +335,10 @@ protected:
     void finalize(XAsyncBlock *p_async_block) override {
         Ref<GDKResult> result;
 
-        if (get_runtime()->is_shutting_down() || get_op()->was_cancel_requested()) {
+        if (get_runtime()->is_shutting_down() || get_pending_signal()->was_cancel_requested()) {
             result = GDKResult::cancelled("Multiplayer invite send cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -346,7 +346,7 @@ protected:
         if (result_hr == E_ABORT) {
             result = GDKResult::cancelled("Multiplayer invite send cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -356,7 +356,7 @@ protected:
                     "Failed to send multiplayer invites.",
                     "multiplayer_activity_send_invites_result_failed");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -366,33 +366,33 @@ protected:
         data["connection_string"] = m_connection_string;
 
         get_runtime()->clear_last_error();
-        get_op()->complete(GDKResult::ok_result(data));
+        get_pending_signal()->complete(GDKResult::ok_result(data));
     }
 
 public:
     SendInvitesAsyncContext(
             GDKMultiplayerActivity *p_service,
             GDKRuntime *p_runtime,
-            const Ref<GDKAsyncOp> &p_op,
+            const Ref<GDKPendingSignal> &p_pending_signal,
             XblContextHandle p_context,
             size_t p_recipient_count,
             bool p_allow_cross_platform_join,
             const String &p_connection_string) :
-            MultiplayerActivityXAsyncContext(p_service, p_runtime, p_op, p_context),
+            MultiplayerActivityXAsyncContext(p_service, p_runtime, p_pending_signal, p_context),
             m_recipient_count(p_recipient_count),
             m_allow_cross_platform_join(p_allow_cross_platform_join),
             m_connection_string(p_connection_string) {}
 };
 
-class InviteUiAsyncContext final : public GDKXAsyncContext {
+class InviteUiAsyncContext final : public GDKSignalXAsyncContext {
 protected:
     void finalize(XAsyncBlock *p_async_block) override {
         Ref<GDKResult> result;
 
-        if (get_runtime()->is_shutting_down() || get_op()->was_cancel_requested()) {
+        if (get_runtime()->is_shutting_down() || get_pending_signal()->was_cancel_requested()) {
             result = GDKResult::cancelled("Invite UI cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -400,7 +400,7 @@ protected:
         if (result_hr == E_ABORT) {
             result = GDKResult::cancelled("Invite UI cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -410,17 +410,17 @@ protected:
                     "Failed to complete the multiplayer invite UI flow.",
                     "multiplayer_activity_invite_ui_result_failed");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
         get_runtime()->clear_last_error();
-        get_op()->complete(GDKResult::ok_result());
+        get_pending_signal()->complete(GDKResult::ok_result());
     }
 
 public:
-    InviteUiAsyncContext(GDKRuntime *p_runtime, const Ref<GDKAsyncOp> &p_op) :
-            GDKXAsyncContext(p_runtime, p_op) {}
+    InviteUiAsyncContext(GDKRuntime *p_runtime, const Ref<GDKPendingSignal> &p_pending_signal) :
+            GDKSignalXAsyncContext(p_runtime, p_pending_signal) {}
 };
 
 class FlushRecentPlayersAsyncContext final : public MultiplayerActivityXAsyncContext {
@@ -428,10 +428,10 @@ protected:
     void finalize(XAsyncBlock *p_async_block) override {
         Ref<GDKResult> result;
 
-        if (get_runtime()->is_shutting_down() || get_op()->was_cancel_requested()) {
+        if (get_runtime()->is_shutting_down() || get_pending_signal()->was_cancel_requested()) {
             result = GDKResult::cancelled("Recent-player flush cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -439,7 +439,7 @@ protected:
         if (result_hr == E_ABORT) {
             result = GDKResult::cancelled("Recent-player flush cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -449,21 +449,21 @@ protected:
                     "Failed to flush recent-player updates.",
                     "multiplayer_activity_flush_recent_players_result_failed");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
         get_runtime()->clear_last_error();
-        get_op()->complete(GDKResult::ok_result());
+        get_pending_signal()->complete(GDKResult::ok_result());
     }
 
 public:
     FlushRecentPlayersAsyncContext(
             GDKMultiplayerActivity *p_service,
             GDKRuntime *p_runtime,
-            const Ref<GDKAsyncOp> &p_op,
+            const Ref<GDKPendingSignal> &p_pending_signal,
             XblContextHandle p_context) :
-            MultiplayerActivityXAsyncContext(p_service, p_runtime, p_op, p_context) {}
+            MultiplayerActivityXAsyncContext(p_service, p_runtime, p_pending_signal, p_context) {}
 };
 
 } // namespace
@@ -626,7 +626,7 @@ void GDKMultiplayerActivity::on_user_removed(const Ref<GDKUser> &p_user) {
     remove_cached_activity_internal(p_user->get_xuid());
 }
 
-Ref<GDKAsyncOp> GDKMultiplayerActivity::set_activity_async(
+Signal GDKMultiplayerActivity::set_activity_async(
         const Ref<GDKUser> &p_user,
         const String &p_connection_string,
         const String &p_join_restriction,
@@ -637,19 +637,19 @@ Ref<GDKAsyncOp> GDKMultiplayerActivity::set_activity_async(
     GDKRuntime *runtime = get_runtime_internal();
 
     if (p_connection_string.strip_edges().is_empty()) {
-        return make_error_async_op_internal(
+        return make_error_signal_internal(
                 E_INVALIDARG,
                 "invalid_connection_string",
                 "A non-empty connection string is required to set the multiplayer activity.");
     }
     if (p_max_players < 0 || p_current_players < 0) {
-        return make_error_async_op_internal(
+        return make_error_signal_internal(
                 E_INVALIDARG,
                 "invalid_player_counts",
                 "Player counts must be zero or greater.");
     }
     if (p_max_players > 0 && p_current_players > p_max_players) {
-        return make_error_async_op_internal(
+        return make_error_signal_internal(
                 E_INVALIDARG,
                 "invalid_player_counts",
                 "current_players cannot exceed max_players.");
@@ -657,7 +657,7 @@ Ref<GDKAsyncOp> GDKMultiplayerActivity::set_activity_async(
 
     XblMultiplayerActivityJoinRestriction join_restriction = XblMultiplayerActivityJoinRestriction::Followed;
     if (!try_parse_join_restriction_internal(p_join_restriction, &join_restriction)) {
-        return make_error_async_op_internal(
+        return make_error_signal_internal(
                 E_INVALIDARG,
                 "invalid_join_restriction",
                 "join_restriction must be 'public', 'invite_only', or 'followed'.");
@@ -667,21 +667,20 @@ Ref<GDKAsyncOp> GDKMultiplayerActivity::set_activity_async(
     uint64_t xbox_user_id = 0;
     Ref<GDKResult> context_result = duplicate_context_for_user_internal(p_user, &context, &xbox_user_id);
     if (!context_result->is_ok()) {
-        return make_error_async_op_internal(
+        return make_error_signal_internal(
                 static_cast<HRESULT>(context_result->get_hresult()),
                 context_result->get_code(),
                 context_result->get_message(),
                 context_result->get_data());
     }
 
-    Ref<GDKAsyncOp> op;
-    op.instantiate();
-    runtime->retain_op(op);
+    Ref<GDKPendingSignal> pending_signal = runtime != nullptr ? runtime->make_pending_signal() : Ref<GDKPendingSignal>();
+    ERR_FAIL_COND_V(pending_signal.is_null(), Signal());
 
     auto *context_wrapper = new SetActivityAsyncContext(
             this,
             runtime,
-            op,
+            pending_signal,
             context,
             String::num_uint64(xbox_user_id),
             p_connection_string,
@@ -707,7 +706,7 @@ Ref<GDKAsyncOp> GDKMultiplayerActivity::set_activity_async(
             p_allow_cross_platform_join,
             context_wrapper->get_async_block());
     if (FAILED(hr)) {
-        op->clear_cancel_handler();
+        pending_signal->clear_cancel_handler();
         delete context_wrapper;
 
         Ref<GDKResult> result = GDKResult::hresult_error(
@@ -715,13 +714,13 @@ Ref<GDKAsyncOp> GDKMultiplayerActivity::set_activity_async(
                 "Failed to start the multiplayer activity update.",
                 "multiplayer_activity_set_start_failed");
         runtime->set_last_error(result);
-        op->complete(result);
+        pending_signal->complete_deferred(result);
     }
 
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
-Ref<GDKAsyncOp> GDKMultiplayerActivity::get_activities_async(const Ref<GDKUser> &p_user, const PackedStringArray &p_xuids) {
+Signal GDKMultiplayerActivity::get_activities_async(const Ref<GDKUser> &p_user, const PackedStringArray &p_xuids) {
     GDKRuntime *runtime = get_runtime_internal();
 
     std::vector<uint64_t> query_xuids;
@@ -734,7 +733,7 @@ Ref<GDKAsyncOp> GDKMultiplayerActivity::get_activities_async(const Ref<GDKUser> 
             "invalid_xuids",
             "Each queried XUID must be a non-empty numeric string.");
     if (!parse_result->is_ok()) {
-        return make_error_async_op_internal(
+        return make_error_signal_internal(
                 static_cast<HRESULT>(parse_result->get_hresult()),
                 parse_result->get_code(),
                 parse_result->get_message());
@@ -743,18 +742,17 @@ Ref<GDKAsyncOp> GDKMultiplayerActivity::get_activities_async(const Ref<GDKUser> 
     XblContextHandle context = nullptr;
     Ref<GDKResult> context_result = duplicate_context_for_user_internal(p_user, &context);
     if (!context_result->is_ok()) {
-        return make_error_async_op_internal(
+        return make_error_signal_internal(
                 static_cast<HRESULT>(context_result->get_hresult()),
                 context_result->get_code(),
                 context_result->get_message(),
                 context_result->get_data());
     }
 
-    Ref<GDKAsyncOp> op;
-    op.instantiate();
-    runtime->retain_op(op);
+    Ref<GDKPendingSignal> pending_signal = runtime != nullptr ? runtime->make_pending_signal() : Ref<GDKPendingSignal>();
+    ERR_FAIL_COND_V(pending_signal.is_null(), Signal());
 
-    auto *context_wrapper = new GetActivitiesAsyncContext(this, runtime, op, context);
+    auto *context_wrapper = new GetActivitiesAsyncContext(this, runtime, pending_signal, context);
     context_wrapper->bind_cancel_handler();
 
     HRESULT hr = XblMultiplayerActivityGetActivityAsync(
@@ -763,7 +761,7 @@ Ref<GDKAsyncOp> GDKMultiplayerActivity::get_activities_async(const Ref<GDKUser> 
             query_xuids.size(),
             context_wrapper->get_async_block());
     if (FAILED(hr)) {
-        op->clear_cancel_handler();
+        pending_signal->clear_cancel_handler();
         delete context_wrapper;
 
         Ref<GDKResult> result = GDKResult::hresult_error(
@@ -771,10 +769,10 @@ Ref<GDKAsyncOp> GDKMultiplayerActivity::get_activities_async(const Ref<GDKUser> 
                 "Failed to start the multiplayer activity query.",
                 "multiplayer_activity_get_start_failed");
         runtime->set_last_error(result);
-        op->complete(result);
+        pending_signal->complete_deferred(result);
     }
 
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
 Ref<GDKMultiplayerActivityInfo> GDKMultiplayerActivity::get_cached_activity(const String &p_xuid) const {
@@ -788,28 +786,27 @@ Ref<GDKMultiplayerActivityInfo> GDKMultiplayerActivity::get_cached_activity(cons
     return Ref<GDKMultiplayerActivityInfo>();
 }
 
-Ref<GDKAsyncOp> GDKMultiplayerActivity::delete_activity_async(const Ref<GDKUser> &p_user) {
+Signal GDKMultiplayerActivity::delete_activity_async(const Ref<GDKUser> &p_user) {
     GDKRuntime *runtime = get_runtime_internal();
 
     XblContextHandle context = nullptr;
     uint64_t xbox_user_id = 0;
     Ref<GDKResult> context_result = duplicate_context_for_user_internal(p_user, &context, &xbox_user_id);
     if (!context_result->is_ok()) {
-        return make_error_async_op_internal(
+        return make_error_signal_internal(
                 static_cast<HRESULT>(context_result->get_hresult()),
                 context_result->get_code(),
                 context_result->get_message(),
                 context_result->get_data());
     }
 
-    Ref<GDKAsyncOp> op;
-    op.instantiate();
-    runtime->retain_op(op);
+    Ref<GDKPendingSignal> pending_signal = runtime != nullptr ? runtime->make_pending_signal() : Ref<GDKPendingSignal>();
+    ERR_FAIL_COND_V(pending_signal.is_null(), Signal());
 
     auto *context_wrapper = new DeleteActivityAsyncContext(
             this,
             runtime,
-            op,
+            pending_signal,
             context,
             String::num_uint64(xbox_user_id));
     context_wrapper->bind_cancel_handler();
@@ -818,7 +815,7 @@ Ref<GDKAsyncOp> GDKMultiplayerActivity::delete_activity_async(const Ref<GDKUser>
             context_wrapper->get_context(),
             context_wrapper->get_async_block());
     if (FAILED(hr)) {
-        op->clear_cancel_handler();
+        pending_signal->clear_cancel_handler();
         delete context_wrapper;
 
         Ref<GDKResult> result = GDKResult::hresult_error(
@@ -826,13 +823,13 @@ Ref<GDKAsyncOp> GDKMultiplayerActivity::delete_activity_async(const Ref<GDKUser>
                 "Failed to start the multiplayer activity delete.",
                 "multiplayer_activity_delete_start_failed");
         runtime->set_last_error(result);
-        op->complete(result);
+        pending_signal->complete_deferred(result);
     }
 
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
-Ref<GDKAsyncOp> GDKMultiplayerActivity::send_invites_async(
+Signal GDKMultiplayerActivity::send_invites_async(
         const Ref<GDKUser> &p_user,
         const PackedStringArray &p_xuids,
         bool p_allow_cross_platform_join,
@@ -849,7 +846,7 @@ Ref<GDKAsyncOp> GDKMultiplayerActivity::send_invites_async(
             "invalid_xuids",
             "Each invited XUID must be a non-empty numeric string.");
     if (!parse_result->is_ok()) {
-        return make_error_async_op_internal(
+        return make_error_signal_internal(
                 static_cast<HRESULT>(parse_result->get_hresult()),
                 parse_result->get_code(),
                 parse_result->get_message());
@@ -859,7 +856,7 @@ Ref<GDKAsyncOp> GDKMultiplayerActivity::send_invites_async(
     uint64_t xbox_user_id = 0;
     Ref<GDKResult> context_result = duplicate_context_for_user_internal(p_user, &context, &xbox_user_id);
     if (!context_result->is_ok()) {
-        return make_error_async_op_internal(
+        return make_error_signal_internal(
                 static_cast<HRESULT>(context_result->get_hresult()),
                 context_result->get_code(),
                 context_result->get_message(),
@@ -875,20 +872,19 @@ Ref<GDKAsyncOp> GDKMultiplayerActivity::send_invites_async(
     }
     if (resolved_connection_string.strip_edges().is_empty()) {
         XblContextCloseHandle(context);
-        return make_error_async_op_internal(
+        return make_error_signal_internal(
                 E_INVALIDARG,
                 "missing_connection_string",
                 "A connection string is required to send multiplayer invites. Set the local activity first or pass one explicitly.");
     }
 
-    Ref<GDKAsyncOp> op;
-    op.instantiate();
-    runtime->retain_op(op);
+    Ref<GDKPendingSignal> pending_signal = runtime != nullptr ? runtime->make_pending_signal() : Ref<GDKPendingSignal>();
+    ERR_FAIL_COND_V(pending_signal.is_null(), Signal());
 
     auto *context_wrapper = new SendInvitesAsyncContext(
             this,
             runtime,
-            op,
+            pending_signal,
             context,
             target_xuids.size(),
             p_allow_cross_platform_join,
@@ -904,7 +900,7 @@ Ref<GDKAsyncOp> GDKMultiplayerActivity::send_invites_async(
             connection_string_utf8.get_data(),
             context_wrapper->get_async_block());
     if (FAILED(hr)) {
-        op->clear_cancel_handler();
+        pending_signal->clear_cancel_handler();
         delete context_wrapper;
 
         Ref<GDKResult> result = GDKResult::hresult_error(
@@ -912,39 +908,37 @@ Ref<GDKAsyncOp> GDKMultiplayerActivity::send_invites_async(
                 "Failed to start the multiplayer invite request.",
                 "multiplayer_activity_send_invites_start_failed");
         runtime->set_last_error(result);
-        op->complete(result);
+        pending_signal->complete_deferred(result);
     }
 
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
-Ref<GDKAsyncOp> GDKMultiplayerActivity::show_invite_ui_async(const Ref<GDKUser> &p_user) {
+Signal GDKMultiplayerActivity::show_invite_ui_async(const Ref<GDKUser> &p_user) {
     GDKRuntime *runtime = get_runtime_internal();
     if (runtime == nullptr || !runtime->is_initialized()) {
-        return make_error_async_op_internal(
+        return make_error_signal_internal(
                 E_FAIL,
                 "not_initialized",
                 "GDK is not initialized. Call GDK.initialize() first.");
     }
     if (!p_user.is_valid() || p_user->get_handle() == nullptr) {
-        return make_error_async_op_internal(
+        return make_error_signal_internal(
                 E_INVALIDARG,
                 "invalid_user",
                 "A signed-in GDKUser is required to show the invite UI.");
     }
 
-    Ref<GDKAsyncOp> op;
-    op.instantiate();
-    runtime->retain_op(op);
+    Ref<GDKPendingSignal> pending_signal = runtime->make_pending_signal();
 
-    auto *context = new InviteUiAsyncContext(runtime, op);
+    auto *context = new InviteUiAsyncContext(runtime, pending_signal);
     context->bind_cancel_handler();
 
     HRESULT hr = XGameUiShowMultiplayerActivityGameInviteAsync(
             context->get_async_block(),
             p_user->get_handle());
     if (FAILED(hr)) {
-        op->clear_cancel_handler();
+        pending_signal->clear_cancel_handler();
         delete context;
 
         Ref<GDKResult> result = GDKResult::hresult_error(
@@ -952,10 +946,10 @@ Ref<GDKAsyncOp> GDKMultiplayerActivity::show_invite_ui_async(const Ref<GDKUser> 
                 "Failed to start the multiplayer invite UI flow.",
                 "multiplayer_activity_invite_ui_start_failed");
         runtime->set_last_error(result);
-        op->complete(result);
+        pending_signal->complete_deferred(result);
     }
 
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
 Ref<GDKResult> GDKMultiplayerActivity::update_recent_players(
@@ -1018,31 +1012,30 @@ Ref<GDKResult> GDKMultiplayerActivity::update_recent_players(
     return GDKResult::ok_result(data);
 }
 
-Ref<GDKAsyncOp> GDKMultiplayerActivity::flush_recent_players_async(const Ref<GDKUser> &p_user) {
+Signal GDKMultiplayerActivity::flush_recent_players_async(const Ref<GDKUser> &p_user) {
     GDKRuntime *runtime = get_runtime_internal();
 
     XblContextHandle context = nullptr;
     Ref<GDKResult> context_result = duplicate_context_for_user_internal(p_user, &context);
     if (!context_result->is_ok()) {
-        return make_error_async_op_internal(
+        return make_error_signal_internal(
                 static_cast<HRESULT>(context_result->get_hresult()),
                 context_result->get_code(),
                 context_result->get_message(),
                 context_result->get_data());
     }
 
-    Ref<GDKAsyncOp> op;
-    op.instantiate();
-    runtime->retain_op(op);
+    Ref<GDKPendingSignal> pending_signal = runtime != nullptr ? runtime->make_pending_signal() : Ref<GDKPendingSignal>();
+    ERR_FAIL_COND_V(pending_signal.is_null(), Signal());
 
-    auto *context_wrapper = new FlushRecentPlayersAsyncContext(this, runtime, op, context);
+    auto *context_wrapper = new FlushRecentPlayersAsyncContext(this, runtime, pending_signal, context);
     context_wrapper->bind_cancel_handler();
 
     HRESULT hr = XblMultiplayerActivityFlushRecentPlayersAsync(
             context_wrapper->get_context(),
             context_wrapper->get_async_block());
     if (FAILED(hr)) {
-        op->clear_cancel_handler();
+        pending_signal->clear_cancel_handler();
         delete context_wrapper;
 
         Ref<GDKResult> result = GDKResult::hresult_error(
@@ -1050,10 +1043,10 @@ Ref<GDKAsyncOp> GDKMultiplayerActivity::flush_recent_players_async(const Ref<GDK
                 "Failed to start the recent-player flush.",
                 "multiplayer_activity_flush_recent_players_start_failed");
         runtime->set_last_error(result);
-        op->complete(result);
+        pending_signal->complete_deferred(result);
     }
 
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
 Ref<GDKResult> GDKMultiplayerActivity::accept_pending_invite(const String &p_invite_uri) {
@@ -1092,33 +1085,30 @@ GDKXboxServices *GDKMultiplayerActivity::get_xbox_services_internal() const {
     return m_owner != nullptr ? m_owner->get_xbox_services() : nullptr;
 }
 
-Ref<GDKAsyncOp> GDKMultiplayerActivity::make_completed_async_op_internal(const Ref<GDKResult> &p_result) const {
+Signal GDKMultiplayerActivity::make_completed_signal_internal(const Ref<GDKResult> &p_result) const {
     GDKRuntime *runtime = get_runtime_internal();
-    if (runtime != nullptr) {
-        return runtime->make_completed_async_op(p_result);
+    Ref<GDKPendingSignal> pending_signal = runtime != nullptr ? runtime->make_pending_signal() : Ref<GDKPendingSignal>();
+    if (pending_signal.is_null()) {
+        pending_signal.instantiate();
     }
-
-    Ref<GDKAsyncOp> op;
-    op.instantiate();
-    op->complete(p_result);
-    return op;
+    pending_signal->complete_deferred(p_result);
+    return pending_signal->get_completed_signal();
 }
 
-Ref<GDKAsyncOp> GDKMultiplayerActivity::make_error_async_op_internal(
+Signal GDKMultiplayerActivity::make_error_signal_internal(
         HRESULT p_hresult,
         const String &p_code,
         const String &p_message,
         const Variant &p_data) const {
-    if (m_owner != nullptr) {
-        return m_owner->make_async_error_op(p_hresult, p_code, p_message, p_data);
-    }
-
-    Ref<GDKResult> result = GDKResult::error_result(p_hresult, p_code, p_message, p_data);
     GDKRuntime *runtime = get_runtime_internal();
     if (runtime != nullptr) {
-        runtime->set_last_error(result);
+        return runtime->make_error_signal(p_hresult, p_code, p_message, p_data);
     }
-    return make_completed_async_op_internal(result);
+
+    Ref<GDKPendingSignal> pending_signal;
+    pending_signal.instantiate();
+    pending_signal->complete_deferred(GDKResult::error_result(p_hresult, p_code, p_message, p_data));
+    return pending_signal->get_completed_signal();
 }
 
 Ref<GDKResult> GDKMultiplayerActivity::duplicate_context_for_user_internal(

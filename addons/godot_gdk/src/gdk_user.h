@@ -16,13 +16,14 @@
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/packed_byte_array.hpp>
 #include <godot_cpp/variant/string.hpp>
+#include <godot_cpp/variant/variant.hpp>
 
 #include <XUser.h>
 
 namespace godot {
 
 class GDK;
-class GDKAsyncOp;
+class GDKPendingSignal;
 class GDKResult;
 class GDKRuntime;
 
@@ -94,8 +95,8 @@ class GDKUsers : public RefCounted {
     static void CALLBACK _user_change_callback(void *p_context, XUserLocalId p_user_local_id, XUserChangeEvent p_event);
 
     GDKRuntime *_get_runtime() const;
-    Ref<GDKAsyncOp> _start_add_user_async(XUserAddOptions p_options, const String &p_action);
-    bool _upsert_user(const Ref<GDKUser> &p_user);
+    Signal _start_add_user_async(XUserAddOptions p_options, const String &p_action);
+    bool _add_or_update_user(const Ref<GDKUser> &p_user);
     Ref<GDKUser> _find_user_by_local_id(XUserLocalId p_user_local_id) const;
     void _remove_user_by_local_id(XUserLocalId p_user_local_id);
 
@@ -108,15 +109,15 @@ public:
     Ref<GDKResult> on_runtime_initialized();
     void shutdown();
 
-    Ref<GDKAsyncOp> add_default_user_async(bool p_allow_guests = false);
-    Ref<GDKAsyncOp> add_user_with_ui_async();
+    Signal add_default_user_async();
+    Signal add_user_with_ui_async();
     Ref<GDKUser> get_primary_user() const;
     Array get_users() const;
-    Ref<GDKAsyncOp> check_privilege_async(const Ref<GDKUser> &p_user, int64_t p_privilege);
-    Ref<GDKAsyncOp> resolve_privilege_with_ui_async(const Ref<GDKUser> &p_user, int64_t p_privilege);
-    Ref<GDKAsyncOp> resolve_issue_with_ui_async(const Ref<GDKUser> &p_user, const String &p_url = String());
-    Ref<GDKAsyncOp> get_gamer_picture_async(const Ref<GDKUser> &p_user, const String &p_size = "medium");
-    Ref<GDKAsyncOp> get_token_and_signature_async(
+    Signal check_privilege_async(const Ref<GDKUser> &p_user, int64_t p_privilege);
+    Signal resolve_privilege_with_ui_async(const Ref<GDKUser> &p_user, int64_t p_privilege);
+    Signal resolve_issue_with_ui_async(const Ref<GDKUser> &p_user, const String &p_url = String());
+    Signal get_gamer_picture_async(const Ref<GDKUser> &p_user, const String &p_size = "medium");
+    Signal get_token_and_signature_async(
             const Ref<GDKUser> &p_user,
             const String &p_method,
             const String &p_url,
@@ -125,7 +126,7 @@ public:
             bool p_force_refresh = false);
 
     void on_user_change(XUserLocalId p_user_local_id, XUserChangeEvent p_event);
-    void complete_add_user(XUserHandle p_user_handle, const Ref<GDKAsyncOp> &p_op);
+    void complete_add_user(XUserHandle p_user_handle, const Ref<GDKPendingSignal> &p_pending_signal);
 };
 
 } // namespace godot

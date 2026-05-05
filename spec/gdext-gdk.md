@@ -40,7 +40,7 @@ This spec borrows the Godot-facing integration patterns that already work well i
 
 Godot's native async/event style is built around first-class [signals](https://docs.godotengine.org/en/stable/classes/class_signal.html), [`await`](https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_basics.html#awaiting-signals-or-coroutines), and [`RefCounted`](https://docs.godotengine.org/en/stable/classes/class_refcounted.html) objects. Exposing raw native handles like `XUserHandle`, `XAsyncBlock`, or queue handles directly to GDScript would fight both Godot ergonomics and Godot lifetime rules.
 
-Wrapping native state in Godot objects such as `GDKAsyncOp`, `GDKDispatchOp`, `GDKUser`, and `GDKSaveContainer` makes the API fit normal GDScript usage patterns like signal connections and `await op.completed`. The common Godot pattern `await get_tree().create_timer(...).timeout` ([SceneTreeTimer](https://docs.godotengine.org/en/stable/classes/class_scenetreetimer.html), [SceneTree.create_timer](https://docs.godotengine.org/en/stable/classes/class_scenetree.html#class-scenetree-method-create-timer)) is the bar this API should feel native next to.
+Wrapping native state in Godot objects such as `GDKUser` and `GDKSaveContainer`, plus exposing one-shot work through completion signals or op objects where handles are still needed, makes the API fit normal GDScript usage patterns like signal connections and `await GDK.users.add_default_user_async()`. The common Godot pattern `await get_tree().create_timer(...).timeout` ([SceneTreeTimer](https://docs.godotengine.org/en/stable/classes/class_scenetreetimer.html), [SceneTree.create_timer](https://docs.godotengine.org/en/stable/classes/class_scenetree.html#class-scenetree-method-create-timer)) is the bar this API should feel native next to.
 
 ### Why service namespaces instead of a flat root
 
@@ -52,7 +52,7 @@ Mirroring that separation in the public API makes partial initialization, docume
 
 GDScript async flows are signal-centric ([await](https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_basics.html#awaiting-signals-or-coroutines), [Using Signals](https://docs.godotengine.org/en/stable/getting_started/step_by_step/signals.html), [Signal](https://docs.godotengine.org/en/stable/classes/class_signal.html)). GDK async flows are task-queue-centric and explicitly separate work and completion ports ([XTaskQueue overview](https://learn.microsoft.com/en-us/gaming/gdk/docs/features/common/async/async-libraries/async-library-xtaskqueue?view=gdk-2604)).
 
-The spec therefore uses background native work plus a main-thread `GDK.dispatch()` that converts results into Godot types, updates caches, and then emits service signals and one-shot op completion. That keeps all Godot-visible state changes on the main thread and makes `await op.completed` feel like normal GDScript.
+The spec therefore uses background native work plus a main-thread `GDK.dispatch()` that converts results into Godot types, updates caches, and then emits service signals followed by one-shot completion signals or op completion. That keeps all Godot-visible state changes on the main thread and makes direct `await` feel like normal GDScript.
 
 This mirrors the same callback-dispatch integration idea used by GodotSteam, adapted to `XTaskQueue`.
 
@@ -60,7 +60,7 @@ This mirrors the same callback-dispatch integration idea used by GodotSteam, ada
 
 Not all Xbox-facing systems are one-shot request/response flows. Presence and the social graph are ongoing state feeds ([Presence overview](https://learn.microsoft.com/en-us/gaming/gdk/docs/services/community/presence/live-presence-overview?view=gdk-2604), [Social Manager overview](https://learn.microsoft.com/en-us/gaming/gdk/docs/services/community/social-manager/live-social-manager-overview?view=gdk-2604)).
 
-Godot's observer model is signal-based ([Using Signals](https://docs.godotengine.org/en/stable/getting_started/step_by_step/signals.html)). So the spec uses one-shot op wrappers (`GDKAsyncOp` for `XAsync` requests and `GDKDispatchOp` for manager/dispatch-backed waits) plus service-owned caches and signals for long-lived state. That split matches both the platform behavior and Godot's scripting model.
+Godot's observer model is signal-based ([Using Signals](https://docs.godotengine.org/en/stable/getting_started/step_by_step/signals.html)). So the spec uses direct-await completion signals for one-shot requests and service-owned caches and signals for long-lived state. That split matches both the platform behavior and Godot's scripting model.
 
 ### Why saves are file-oriented
 
@@ -76,8 +76,7 @@ Microsoft recommends [XGameSaveFiles](https://learn.microsoft.com/en-us/gaming/g
 
 | Native concept | GDScript wrapper |
 | --- | --- |
-| `XAsyncBlock` / task queue op | `GDKAsyncOp` |
-| manager-/dispatch-backed one-shot wait | `GDKDispatchOp` |
+| one-shot async request | `Signal` |
 | `HRESULT` + payload | `GDKResult` |
 | `XUserHandle` | `GDKUser` |
 | Save container metadata/path | `GDKSaveContainer` |
@@ -88,7 +87,7 @@ Microsoft recommends [XGameSaveFiles](https://learn.microsoft.com/en-us/gaming/g
 ### General rules
 
 1. Public methods use snake_case and Godot-native types.
-2. One-shot async APIs always return a one-shot op: `GDKAsyncOp` for `XAsync`-backed work or `GDKDispatchOp` for manager/dispatch-backed waits. Long-lived systems expose service signals and caches.
+2. One-shot async APIs return a completion `Signal`. Long-lived systems expose service signals and caches.
 3. GDScript-facing values stay within Godot's type system: `bool`, `int`, `float`, `String`, `Dictionary`, `Array`, and `PackedByteArray`.
 4. Long-lived script objects use `RefCounted`, `Resource`, or `Node` when lifecycle matters.
 5. Public terminology stays at the gameplay/service level: containers/files, stat names/values, leaderboards/entries, and groups/users.
@@ -100,7 +99,7 @@ Microsoft recommends [XGameSaveFiles](https://learn.microsoft.com/en-us/gaming/g
 
 The async model should behave like a Godot-native future/promise layer over GDK's queue-based async APIs. The key rule is:
 
-> **Normative rule:** Every one-shot GDK request must return the appropriate one-shot op type (`GDKAsyncOp` for `XAsync` work or `GDKDispatchOp` for manager/dispatch-backed waits), and completion only becomes visible to GDScript after main-thread dispatch.
+> **Normative rule:** Every one-shot GDK request must return a completion `Signal`, and completion only becomes visible to GDScript after main-thread dispatch.
 
 #### GDK vs Godot model delta
 
@@ -111,27 +110,26 @@ The wrapper layer should therefore normalize the following mismatches:
 | Concern | GDK assumption | Godot assumption | Wrapper rule |
 | --- | --- | --- | --- |
 | Ownership | The caller owns the `XAsyncBlock`, callback context, and any result buffers needed by `*Result()` functions. | Script code should never manage raw native handles or callback memory. | Native async state must stay inside extension-owned helper objects. |
-| Completion | Completion may be observed by `XAsync` callback/result extraction or by manager/event state during dispatch. | Completion should be a signal that can be `await`ed. | Every one-shot wrapper returns an op object and emits `completed(result)` exactly once. |
+| Completion | Completion may be observed by `XAsync` callback/result extraction or by manager/event state during dispatch. | Completion should be a signal that can be `await`ed. | Every one-shot wrapper returns a completion signal that emits the final result exactly once. |
 | Threading | Work and completion threads are chosen by `XTaskQueue` ports and may differ. | Godot-visible object creation, cache mutation, and signal emission should happen on the main thread. | Use a shared queue with background work and manual completion dispatch, then finalize on `GDK.dispatch()`. |
 | Results | Success/failure lives in `HRESULT` plus API-specific payload structs. | Script code expects one stable result shape with Godot-native data. | Convert native status into a reusable `GDKResult` carrying `ok`, `hresult`, `code`, `message`, and `data`. |
-| Cancellation | `XAsyncCancel` is best effort and late completion is still legal. | `cancel()` should be safe, idempotent, and never create double-completion. | Track cancel state in the op wrapper and ignore or normalize late completions deterministically. |
-| Long-lived updates | Notifications and manager feeds may never finish. | Ongoing state is modeled as caches plus signals. | Use one-shot ops only for bounded request/response waits; long-lived systems update service-owned caches and emit service signals. |
+| Cancellation | `XAsyncCancel` is best effort and late completion is still legal. | Completion should resolve at most once even when shutdown or cancellation races native work. | Track cancel state in the internal pending request and ignore or normalize late completions deterministically. |
+| Long-lived updates | Notifications and manager feeds may never finish. | Ongoing state is modeled as caches plus signals. | Use one-shot completion signals only for bounded request/response waits; long-lived systems update service-owned caches and emit service signals. |
 
 #### Internal async bridge architecture
 
-The public one-shot op contract needs a reusable internal bridge layer rather than per-service ad hoc callback code. The internal architecture should consist of:
+The public one-shot completion-signal contract needs a reusable internal bridge layer rather than per-service ad hoc callback code. The internal architecture should consist of:
 
 1. **Shared runtime owner**
    - Owns the shared `XTaskQueue`.
    - Configures the queue for background work and manual completion dispatch.
-   - Retains active one-shot op references so fire-and-forget script calls stay alive until completion.
+   - Retains active one-shot request references so fire-and-forget script calls stay alive until completion.
    - Coordinates shutdown and queue termination.
 
-2. **Script-facing async wrappers**
-   - `GDKAsyncOp` is the public wrapper for `XAsync`-backed one-shot work.
-   - `GDKDispatchOp` is the public wrapper for manager/dispatch-backed one-shot waits.
+2. **Script-facing async wrapper**
+   - One-shot public methods return a completion `Signal`.
    - `GDKResult` is the only public success/error payload shape.
-   - Immediate failures and sync-adapted helpers still complete through the appropriate one-shot op surface.
+   - Immediate failures and sync-adapted helpers still complete through the same completion-signal surface.
 
 3. **Internal `XAsync` bridge context**
    - Owns one `XAsyncBlock` and any per-call native context.
@@ -143,47 +141,34 @@ The public one-shot op contract needs a reusable internal bridge layer rather th
    - Extract native result data from the completed `XAsyncBlock`.
    - Translate native payloads into Godot wrapper objects or Variant-friendly data.
    - Update the owning service cache before exposing completion to GDScript.
-   - Emit service signals before `op.completed`.
+   - Emit service signals before the completion signal resolves.
 
 #### Required `XAsync` lifecycle
 
-Every `XAsync`-backed wrapper should follow this lifecycle:
+Every one-shot wrapper should follow this lifecycle:
 
-1. Allocate `GDKAsyncOp`.
-2. Allocate a bridge context that owns the `XAsyncBlock` and any native per-call state.
-3. Bind the `XAsyncBlock` to the shared queue.
-4. Start the native async API.
-5. When the native callback fires on the completion port, extract status and finalize the service state on the `GDK.dispatch()` thread.
-6. Update caches and emit service signals.
-7. Complete the `GDKAsyncOp`.
-8. Release retained native/context state.
-
-#### Required dispatch-backed lifecycle
-
-Every manager/event-driven wrapper should follow this lifecycle:
-
-1. Allocate `GDKDispatchOp`.
-2. Register it in service-owned pending state.
-3. Ensure any required manager/user registration is active.
-4. Let `GDK.dispatch()` pump the underlying manager/event feed.
-5. Refresh caches from the matching manager state.
+1. Allocate an internal pending request.
+2. For `XAsync`-backed work, allocate a bridge context that owns the `XAsyncBlock` and any native per-call state; for manager/event-driven waits, register the pending request in service-owned state.
+3. Start the native async API or activate the required manager/user registration.
+4. Let `GDK.dispatch()` pump the completion queue and any manager/event feed.
+5. Extract native result data and refresh service caches.
 6. Emit service signals.
-7. Complete the `GDKDispatchOp`.
-8. Remove the pending/retained state.
+7. Resolve the returned completion signal.
+8. Release retained native/context/request state.
 
 #### Immediate and sync-adapted operations
 
-Not every public wrapper maps to a documented native async API. Some operations will adapt synchronous native calls into the same `GDKAsyncOp` shape so GDScript still sees one consistent async contract. Those operations should:
+Not every public wrapper maps to a documented native async API. Some operations will adapt synchronous native calls into the same completion-signal shape so GDScript still sees one consistent async contract. Those operations should:
 
-- return a `GDKAsyncOp` even when the result is already known
-- complete the op with an already-finalized `GDKResult`
-- preserve the same cache-before-`completed` ordering guarantees as native async calls
+- return a completion `Signal` even when the result is already known
+- resolve the signal with an already-finalized `GDKResult`
+- preserve the same cache-before-completion ordering guarantees as native async calls
 
 #### Shutdown behavior
 
 Shutdown must be queue-safe and op-safe:
 
-- active one-shot operations should be retained by the runtime until they reach a terminal state
+- active one-shot requests should be retained by the runtime until they reach a terminal state
 - queue termination should surface cancellation as failed `GDKResult` values rather than silently dropping callbacks
 - no service cache or Godot object should be mutated after the runtime starts teardown
 - `GDK.shutdown()` should clean up services first, then terminate and close the shared queue, then uninitialize the GDK runtime
@@ -195,11 +180,11 @@ Shutdown must be queue-safe and op-safe:
    - The queue should use a worker port for background work and a manual completion port.
    - `GDK.dispatch()` dispatches the completion port. If `embed_dispatch` is enabled, the extension should do this automatically each frame from Godot's main thread.
 
-2. **One operation object per one-shot request**
-   - Calls like `query_user_stats_async()` or `open_container_async()` create one `GDKAsyncOp`.
-   - Manager-backed waits like `query_player_achievements_async()` create one `GDKDispatchOp`.
-   - Each op owns or is paired with the native state needed for its completion model.
-   - Service managers keep strong references to active ops until they complete so GDScript can safely fire-and-forget.
+2. **One completion request per one-shot API**
+   - Calls like `query_user_stats_async()` or `open_container_async()` create one internal pending request and return its completion `Signal`.
+   - Manager-backed waits like `query_player_achievements_async()` follow the same public contract even though the service-owned state is different internally.
+   - Each request owns or is paired with the native state needed for its completion model.
+   - Services keep strong references to active requests until they complete so GDScript can safely fire-and-forget.
 
 3. **Native work happens off-thread; Godot work happens on-thread**
    - GDK does its work through the shared queue in the background.
@@ -210,28 +195,14 @@ Shutdown must be queue-safe and op-safe:
    - Convert native payloads into Godot-friendly types.
    - Update the owning service cache (`GDK.stats`, `GDK.presence`, etc.).
    - Emit service-level signals like `stats_updated()` or `presence_changed()`.
-   - Emit `op.completed(result)` on the one-shot op.
+   - Resolve the returned completion signal with the final `GDKResult`.
 
-By the time `completed` fires, the relevant service cache should already be current.
+By the time the completion signal resolves, the relevant service cache should already be current.
 
-#### `GDKAsyncOp`
-
-```gdscript
-signal completed(result: GDKResult)
-
-is_done() -> bool
-cancel() -> bool
-get_result() -> GDKResult
-```
-
-#### `GDKDispatchOp`
+#### Completion signal
 
 ```gdscript
-signal completed(result: GDKResult)
-
-is_done() -> bool
-cancel() -> bool
-get_result() -> GDKResult
+await some_service.some_method_async() # -> GDKResult
 ```
 
 #### `GDKResult`
@@ -248,16 +219,15 @@ data: Variant
 
 - No Godot objects should be created or signaled from worker threads.
 - All async completions depend on `GDK.dispatch()` running.
-- If `embed_dispatch` is disabled and the game never calls `dispatch()`, `await` on async ops will hang.
-- `cancel()` is best effort: use native cancellation when available; otherwise mark the op cancelled and ignore late completions.
-- Even immediate failures should still return an already-completed one-shot op of the appropriate type.
+- If `embed_dispatch` is disabled and the game never calls `dispatch()`, `await` on completion signals will hang.
+- Cancellation is best effort: use native cancellation when available; otherwise mark the pending request cancelled and ignore late completions.
+- Even immediate failures should still return an already-completed one-shot completion signal of the appropriate type.
 
 #### Async patterns
 
 | Pattern | Used for | Public surface |
 | --- | --- | --- |
-| `XAsync` one-shot request/response | sign-in, purchases, save reads/writes, leaderboard queries | `GDKAsyncOp` |
-| dispatch-backed one-shot wait | achievement cache warm-up/updates, future social-manager waits | `GDKDispatchOp` |
+| one-shot request/response or manager-backed wait | sign-in, save container opens, achievement cache warm-up/updates, leaderboard queries | completion `Signal` |
 | Long-lived background state | social graph updates, presence changes, tracked stat change notifications | service signals + cached state |
 
 #### Examples
@@ -270,8 +240,7 @@ if not init_result.ok:
     push_error(init_result.message)
     return
 
-var op := GDK.users.add_default_user_async()
-var result: GDKResult = await op.completed
+var result: GDKResult = await GDK.users.add_default_user_async()
 if result.ok:
     var user: GDKUser = result.data
 ```
@@ -281,8 +250,7 @@ if result.ok:
 ```gdscript
 GDK.stats.stats_updated.connect(_on_stats_updated)
 
-var op := GDK.stats.query_user_stats_async(user, PackedStringArray(["xp", "wins"]))
-var result: GDKResult = await op.completed
+var result: GDKResult = await GDK.stats.query_user_stats_async(user, PackedStringArray(["xp", "wins"]))
 if result.ok:
     # Safe to read the cache here; service state should already be updated.
     print(GDK.stats.get_cached_stats(user))
@@ -302,8 +270,7 @@ func _process(_delta: float) -> void:
 #### Example: fire-and-forget async operation
 
 ```gdscript
-var op := GDK.save.open_container_async(user, "profile")
-op.completed.connect(func(result: GDKResult) -> void:
+GDK.save.open_container_async(user, "profile").connect(func(result: GDKResult) -> void:
     if not result.ok:
         push_error(result.message)
 )
@@ -365,7 +332,7 @@ availability_changed(available: bool)
 
 | Public surface | Native API(s) | Notes |
 | --- | --- | --- |
-| `GDK.initialize()` | `XGameRuntimeInitialize`, `XTaskQueueCreate` | Creates the shared task queue and runtime bootstrap state used by all one-shot async ops and service-owned callback bridges. |
+| `GDK.initialize()` | `XGameRuntimeInitialize`, `XTaskQueueCreate` | Creates the shared task queue and runtime bootstrap state used by all one-shot completion signals and service-owned callback bridges. |
 | `GDK.shutdown()` | `XTaskQueueTerminate`, `XTaskQueueCloseHandle`, `XGameRuntimeUninitialize` | Service and user cleanup should run first; queue/runtime teardown happens last. |
 | `GDK.dispatch()` | `XTaskQueueDispatch`, `XblAchievementsManagerDoWork`, `XblSocialManagerDoWork` | Main-thread pump. Dispatch the completion port, translate native payloads into Godot objects, update caches, then emit signals. |
 | per-user Xbox services context | `XblContextCreateHandle`, `XblContextCloseHandle` | Create once for each admitted `GDKUser`; store inside the wrapper for achievements, stats, leaderboards, presence, and social calls. |
@@ -381,15 +348,15 @@ Unless otherwise noted, the service sections below follow the global naming, typ
 ##### Methods
 
 ```gdscript
-add_default_user_async(allow_guests := false) -> GDKAsyncOp
-add_user_with_ui_async() -> GDKAsyncOp
+add_default_user_async() -> Signal
+add_user_with_ui_async() -> Signal
 get_primary_user() -> GDKUser
 get_users() -> Array[GDKUser]
-check_privilege_async(user: GDKUser, privilege: int) -> GDKAsyncOp
-resolve_privilege_with_ui_async(user: GDKUser, privilege: int) -> GDKAsyncOp
-resolve_issue_with_ui_async(user: GDKUser, url := "") -> GDKAsyncOp
-get_gamer_picture_async(user: GDKUser, size := "medium") -> GDKAsyncOp
-get_token_and_signature_async(user: GDKUser, method: String, url: String, headers := {}, body := PackedByteArray(), force_refresh := false) -> GDKAsyncOp
+check_privilege_async(user: GDKUser, privilege: int) -> Signal
+resolve_privilege_with_ui_async(user: GDKUser, privilege: int) -> Signal
+resolve_issue_with_ui_async(user: GDKUser, url := "") -> Signal
+get_gamer_picture_async(user: GDKUser, size := "medium") -> Signal
+get_token_and_signature_async(user: GDKUser, method: String, url: String, headers := {}, body := PackedByteArray(), force_refresh := false) -> Signal
 ```
 
 ##### Signals
@@ -397,7 +364,7 @@ get_token_and_signature_async(user: GDKUser, method: String, url: String, header
 ```gdscript
 user_added(user: GDKUser)
 user_removed(local_id: int)
-user_changed(user: GDKUser)
+user_changed(user: GDKUser, change_kind: String)
 primary_user_changed(user: GDKUser)
 ```
 
@@ -420,24 +387,24 @@ is_store_user() -> bool
 
 | Wrapper/API | Native API(s) | Notes |
 | --- | --- | --- |
-| `add_default_user_async()` | `XUserAddAsync`, `XUserAddResult` | Uses `XUserAddAsync` with the appropriate default-user option; on success, populate `GDKUser`, create `XblContextHandle`, and ensure change notifications are registered. |
-| `add_user_with_ui_async()` | `XUserAddAsync`, `XUserAddResult` | Uses the UI-driven add path; post-processing is the same as the default-user path. |
-| `check_privilege_async()` | `XUserCheckPrivilege` | There is no documented async privilege-check API in `XUser`; this wrapper should complete a `GDKAsyncOp` from the synchronous result. Successful results carry a `Dictionary` in `GDKResult.data` with `privilege`, `has_privilege`, `deny_reason`, and `deny_reason_value`. If the check returns `E_GAMEUSER_RESOLVE_USER_ISSUE_REQUIRED`, the op should fail and direct callers to `resolve_issue_with_ui_async()`. |
+| `add_default_user_async()` | `XUserAddAsync`, `XUserAddResult` | Uses the silent default-user path without guest support; on success, populate `GDKUser`, create `XblContextHandle`, and ensure change notifications are registered. |
+| `add_user_with_ui_async()` | `XUserAddAsync`, `XUserAddResult` | Uses the UI-driven add path with guest selection enabled; post-processing is the same as the default-user path except that later adds do not replace the session primary user once one already exists. |
+| `check_privilege_async()` | `XUserCheckPrivilege` | There is no documented async privilege-check API in `XUser`; this wrapper should convert the synchronous result into a deferred completion `Signal`. Successful results carry a `Dictionary` in `GDKResult.data` with `privilege`, `has_privilege`, `deny_reason`, and `deny_reason_value`. If the check returns `E_GAMEUSER_RESOLVE_USER_ISSUE_REQUIRED`, the request should fail and direct callers to `resolve_issue_with_ui_async()`. |
 | `resolve_privilege_with_ui_async()` | `XUserResolvePrivilegeWithUiAsync`, `XUserResolvePrivilegeWithUiResult` | Use the native UI remediation path when `check_privilege_async()` reports that a privilege is denied and the title wants to let the player resolve it immediately. Successful results can carry a small `Dictionary` payload that echoes the resolved privilege id. |
 | `resolve_issue_with_ui_async()` | `XUserResolveIssueWithUiAsync`, `XUserResolveIssueWithUiResult` | This is the remediation path for `E_GAMEUSER_RESOLVE_USER_ISSUE_REQUIRED` from `XUser` getters such as age-group lookups and from privilege checks. Treat an empty `url` as the Xbox services/default flow and pass a URL only when the underlying issue is request-specific. |
 | `get_gamer_picture_async()` | `XUserGetGamerPictureAsync`, `XUserGetGamerPictureResultSize`, `XUserGetGamerPictureResult` | Accept `small`, `medium`, `large`, and `extra_large` size strings. Decode the returned PNG bytes into a Godot `Image` and place that `Image` in `GDKResult.data`. |
 | `get_token_and_signature_async()` | `XUserGetTokenAndSignatureAsync`, `XUserGetTokenAndSignatureResultSize`, `XUserGetTokenAndSignatureResult` | First-pass token support should expose explicit request parameters: HTTP method, full URL, headers `Dictionary`, optional `PackedByteArray` body, and `force_refresh`. Successful results carry a `Dictionary` with `token` and `signature`. |
-| `user_changed` / `user_removed` | `XUserRegisterForChangeEvent`, `XUserUnregisterForChangeEvent` | Register one runtime-wide change callback against the shared queue and reconcile affected `GDKUser` wrappers by local id. |
+| `user_changed` / `user_removed` | `XUserRegisterForChangeEvent`, `XUserUnregisterForChangeEvent` | Register one runtime-wide change callback against the shared queue and reconcile affected `GDKUser` wrappers by local id. `user_changed` should emit the refreshed wrapper plus a snake_case `change_kind` string such as `signed_in_again`, `gamertag`, `gamer_picture`, or `privileges`. |
 | `GDKUser` getters | `XUserGetLocalId`, `XUserGetId`, `XUserGetGamertag`, `XUserGetAgeGroup`, `XUserGetIsGuest`, `XUserGetState`, `XUserIsStoreUser` | Pure wrapper accessors with no extra service traffic. Expose age-group and sign-in state as Godot enums with bound constants on `GDKUser`, and provide `get_age_group_name()` / `get_sign_in_state_name()` for human-readable snake_case strings such as `adult` and `signed_in`. |
 
-Each `GDKUser` should own an `XUserHandle` and an `XblContextHandle`. The runtime should own a single change-event registration token. Cleanup order should be: unregister runtime change notifications, remove the user from service-owned caches/managers, close the Xbox services context, then call `XUserCloseHandle`.
+Each `GDKUser` should own an `XUserHandle` and an `XblContextHandle`. The runtime should own a single change-event registration token. Cleanup order should be: unregister runtime change notifications, remove the user from service-owned caches/managers, close the Xbox services context, then call `XUserCloseHandle`. The first successful user add establishes the session primary user; later adds should not promote a different cached user to primary.
 
 #### `GDK.save` service
 
 ##### Methods
 
 ```gdscript
-open_container_async(user: GDKUser, container_name: String) -> GDKAsyncOp
+open_container_async(user: GDKUser, container_name: String) -> Signal
 get_container(user: GDKUser, container_name: String) -> GDKSaveContainer
 ```
 
@@ -461,8 +428,7 @@ get_user() -> GDKUser
 ##### Example
 
 ```gdscript
-var op := GDK.save.open_container_async(user, "profile")
-var result: GDKResult = await op.completed
+var result: GDKResult = await GDK.save.open_container_async(user, "profile")
 if not result.ok:
     push_error(result.message)
     return
@@ -487,8 +453,8 @@ file.store_string(JSON.stringify(save_data))
 ##### Methods
 
 ```gdscript
-query_player_achievements_async(user: GDKUser) -> GDKDispatchOp
-update_achievement_async(user: GDKUser, achievement_id: String, percent_complete: int) -> GDKDispatchOp
+query_player_achievements_async(user: GDKUser) -> Signal
+update_achievement_async(user: GDKUser, achievement_id: String, percent_complete: int) -> Signal
 get_cached_achievements(user: GDKUser) -> Array
 ```
 
@@ -504,7 +470,7 @@ achievements_updated(user: GDKUser)
 - Keep public API achievement-centered.
 - Stats, leaderboards, presence, and social should stay separate services instead of being folded into achievements.
 - Use Achievements Manager as the authoritative v1 implementation rather than building a separate ad hoc achievement cache.
-- Use `GDKDispatchOp` for manager/event-driven one-shot waits so cancellation can unregister local pending state immediately.
+- Use completion `Signal` for manager/event-driven one-shot waits so callers can `await` the method directly while the service handles pending-state cleanup internally.
 - For GDK Game OS titles, derive the default current-title SCID from `XGameGetXboxTitleId()` as a null GUID with the Title ID in the last 8 hex digits. Only require explicit SCID overrides for advanced cross-title scenarios.
 
 ##### Native API mapping
@@ -513,7 +479,7 @@ achievements_updated(user: GDKUser)
 | --- | --- | --- |
 | user lifecycle | `XblAchievementsManagerAddLocalUser`, `XblAchievementsManagerRemoveLocalUser` | Register each signed-in local user with the manager and remove them on sign-out/shutdown. |
 | `query_player_achievements_async()` | `XblAchievementsManagerAddLocalUser`, `XblAchievementsManagerIsUserInitialized`, `XblAchievementsManagerDoWork`, `XblAchievementsManagerGetAchievements` | Treat this as a cache-warm operation: ensure the user is registered, wait until the manager reports the user initialized, then copy the cache into Godot objects before completing. |
-| `update_achievement_async()` | `XblAchievementsManagerUpdateAchievement`, `XblAchievementsManagerDoWork` | Complete the wrapper op only after the manager reports the updated achievement state on the dispatch thread. |
+| `update_achievement_async()` | `XblAchievementsManagerUpdateAchievement`, `XblAchievementsManagerDoWork` | Resolve the returned completion signal only after the manager reports the updated achievement state on the dispatch thread. |
 | `get_cached_achievements()` | `XblAchievementsManagerGetAchievements` | Reads the current manager cache and translates it into Godot-facing achievement objects. |
 | `achievement_unlocked` / `achievements_updated` | `XblAchievementsManagerDoWork` | These signals come from manager update events, not from a separate polling or REST-style query path. |
 
@@ -524,10 +490,10 @@ The manager result handles should be copied into extension-owned data immediatel
 ##### Methods
 
 ```gdscript
-query_user_stats_async(user: GDKUser, stat_names := PackedStringArray()) -> GDKAsyncOp
+query_user_stats_async(user: GDKUser, stat_names := PackedStringArray()) -> Signal
 set_stat_number(user: GDKUser, stat_name: String, value: float) -> GDKResult
 set_stat_integer(user: GDKUser, stat_name: String, value: int) -> GDKResult
-flush_stats_async(user: GDKUser, immediate := false) -> GDKAsyncOp
+flush_stats_async(user: GDKUser, immediate := false) -> Signal
 get_cached_stats(user: GDKUser) -> Dictionary
 ```
 
@@ -562,9 +528,9 @@ Earlier undocumented stats-family references were removed during audit. The docu
 ##### Methods
 
 ```gdscript
-get_leaderboard_async(user: GDKUser, stat_name: String, query: GDKLeaderboardQuery = null) -> GDKAsyncOp
-get_leaderboard_around_user_async(user: GDKUser, stat_name: String, max_items := 25) -> GDKAsyncOp
-get_social_leaderboard_async(user: GDKUser, stat_name: String, max_items := 25) -> GDKAsyncOp
+get_leaderboard_async(user: GDKUser, stat_name: String, query: GDKLeaderboardQuery = null) -> Signal
+get_leaderboard_around_user_async(user: GDKUser, stat_name: String, max_items := 25) -> Signal
+get_social_leaderboard_async(user: GDKUser, stat_name: String, max_items := 25) -> Signal
 get_cached_leaderboard(stat_name: String) -> GDKLeaderboard
 ```
 
@@ -594,9 +560,9 @@ leaderboard_updated(stat_name: String, leaderboard: GDKLeaderboard)
 ##### Methods
 
 ```gdscript
-set_presence_async(user: GDKUser, state: String, rich_presence := {}) -> GDKAsyncOp
-clear_presence_async(user: GDKUser) -> GDKAsyncOp
-get_presence_async(xuids: PackedStringArray) -> GDKAsyncOp
+set_presence_async(user: GDKUser, state: String, rich_presence := {}) -> Signal
+clear_presence_async(user: GDKUser) -> Signal
+get_presence_async(xuids: PackedStringArray) -> Signal
 get_cached_presence(xuid: String) -> GDKPresenceRecord
 ```
 
@@ -620,7 +586,7 @@ local_presence_set(user: GDKUser)
 | --- | --- | --- |
 | `set_presence_async()` | `XblPresenceSetPresenceAsync`, `XblPresenceRichPresenceIds` | Local presence write path. The wrapper should translate lightweight Godot presence input into the documented rich-presence id shape. |
 | `clear_presence_async()` | `XblPresenceSetPresenceAsync` | Wrapper convenience only. Implement by setting the local user inactive and omitting rich presence, since no dedicated clear API is documented. |
-| `get_presence_async()` | `XblPresenceGetPresenceAsync`, `XblPresenceGetPresenceResult`, `XblPresenceGetPresenceForMultipleUsersAsync`, `XblPresenceGetPresenceForMultipleUsersResultCount`, `XblPresenceGetPresenceForMultipleUsersResult` | Use the single-user or multiple-user path based on the XUID count, then update the cache before completing the op. |
+| `get_presence_async()` | `XblPresenceGetPresenceAsync`, `XblPresenceGetPresenceResult`, `XblPresenceGetPresenceForMultipleUsersAsync`, `XblPresenceGetPresenceForMultipleUsersResultCount`, `XblPresenceGetPresenceForMultipleUsersResult` | Use the single-user or multiple-user path based on the XUID count, then update the cache before completing the returned signal. |
 | `get_cached_presence()` | service cache only | Presence records are cached and owned by `GDK.presence`, even when the social layer is also active. |
 
 #### `GDK.social` service
@@ -630,7 +596,7 @@ local_presence_set(user: GDKUser)
 ```gdscript
 start_social_graph(user: GDKUser) -> GDKResult
 stop_social_graph(user: GDKUser) -> void
-get_friends_async(user: GDKUser) -> GDKAsyncOp
+get_friends_async(user: GDKUser) -> Signal
 create_social_group(user: GDKUser, filter: GDKSocialFilter = null) -> GDKSocialGroup
 create_social_group_from_xuids(user: GDKUser, xuids: PackedStringArray) -> GDKSocialGroup
 destroy_social_group(group: GDKSocialGroup) -> void

@@ -21,9 +21,25 @@ set(GODOT_SAMPLE_DIRS
     "${CMAKE_SOURCE_DIR}/sample/playfab_demo"
 )
 
+include(GodotExtensionCommon)
+
 option(BUILD_GODOT_GDK "Build the godot_gdk addon" ON)
 option(BUILD_GODOT_GAMEINPUT "Build the godot_gameinput addon" ON)
 option(BUILD_GODOT_PLAYFAB "Build the godot_playfab addon" ON)
+
+set(GODOT_GDK_PACKAGING_MIRROR_DIRS)
+
+foreach(sample_dir IN LISTS GODOT_SAMPLE_DIRS)
+    list(APPEND GODOT_GDK_PACKAGING_MIRROR_DIRS
+        "${sample_dir}/addons/godot_gdk_packaging"
+    )
+endforeach()
+
+godot_addon_sync_directory(
+    TARGET_NAME sync_godot_gdk_packaging
+    SOURCE_DIR "${CMAKE_SOURCE_DIR}/addons/godot_gdk_packaging"
+    MIRROR_DIRS ${GODOT_GDK_PACKAGING_MIRROR_DIRS}
+)
 
 add_subdirectory(godot-cpp)
 

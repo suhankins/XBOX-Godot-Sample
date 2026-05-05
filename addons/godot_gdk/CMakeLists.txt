@@ -12,9 +12,8 @@ add_library(godot_gdk SHARED
     src/gdk.cpp
     src/gdk_runtime.cpp
     src/gdk_result.cpp
-    src/gdk_async_op.cpp
-    src/gdk_dispatch_op.cpp
-    src/gdk_xasync_context.cpp
+    src/gdk_pending_signal.cpp
+    src/gdk_signal_xasync_context.cpp
     src/gdk_user.cpp
     src/gdk_achievement.cpp
     src/gdk_presence.cpp
@@ -68,6 +67,7 @@ godot_addon_sync_files_to_sample(
     FILES
         plugin.cfg
         godot_gdk.gdextension
+        runtime/gdk_bootstrap.gd
         editor/gdk_editor_plugin.gd
         editor/gdk_export_platform.gd
         editor/gdk_setup_panel.gd

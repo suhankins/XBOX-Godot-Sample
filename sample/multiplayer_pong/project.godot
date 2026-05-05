@@ -21,7 +21,7 @@ config/icon="res://icon.webp"
 
 [autoload]
 
-GDKBootstrap="*res://gdk_bootstrap.gd"
+GDKBootstrap="*res://addons/godot_gdk/runtime/gdk_bootstrap.gd"
 GameInputBootstrap="*res://addons/godot_gameinput/runtime/gameinput_bootstrap.gd"
 
 [debug]
@@ -41,16 +41,14 @@ enabled=PackedStringArray("res://addons/godot_gdk/plugin.cfg", "res://addons/god
 
 [gdk]
 
+runtime/initialize_on_startup=true
 runtime/embed_dispatch=true
+runtime/auto_add_primary_user=true
 
 [game_input]
 
 runtime/initialize_on_startup=true
 mapper/default_action_map="res://gameinput_actions.tres"
-
-[gdk]
-
-runtime/embed_dispatch=true
 
 [input]
 

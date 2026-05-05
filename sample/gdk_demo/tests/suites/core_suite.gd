@@ -1,6 +1,8 @@
 extends RefCounted
 
+const INITIALIZE_ON_STARTUP_SETTING := "gdk/runtime/initialize_on_startup"
 const EMBED_DISPATCH_SETTING := "gdk/runtime/embed_dispatch"
+const AUTO_ADD_PRIMARY_USER_SETTING := "gdk/runtime/auto_add_primary_user"
 
 func run(context) -> void:
 	_test_singleton_availability(context)
@@ -29,8 +31,6 @@ func _test_class_registration(context) -> void:
 		"GDKSocialFilter",
 		"GDKSocialGroup",
 		"GDKSocialUser",
-		"GDKAsyncOp",
-		"GDKDispatchOp",
 		"GDKResult"
 	]:
 		context.assert_true(ClassDB.class_exists(registered_class), "%s registered in ClassDB" % registered_class)
@@ -46,8 +46,6 @@ func _test_class_registration(context) -> void:
 	context.assert_true(ClassDB.is_parent_class("GDKSocialFilter", "RefCounted"), "GDKSocialFilter extends RefCounted")
 	context.assert_true(ClassDB.is_parent_class("GDKSocialGroup", "RefCounted"), "GDKSocialGroup extends RefCounted")
 	context.assert_true(ClassDB.is_parent_class("GDKSocialUser", "RefCounted"), "GDKSocialUser extends RefCounted")
-	context.assert_true(ClassDB.is_parent_class("GDKAsyncOp", "RefCounted"), "GDKAsyncOp extends RefCounted")
-	context.assert_true(ClassDB.is_parent_class("GDKDispatchOp", "GDKAsyncOp"), "GDKDispatchOp extends GDKAsyncOp")
 	context.assert_true(ClassDB.is_parent_class("GDKResult", "RefCounted"), "GDKResult extends RefCounted")
 
 func _test_gdk_root_api(context) -> void:
@@ -73,8 +71,14 @@ func _test_gdk_root_api(context) -> void:
 	context.assert_true(gdk.is_available() is bool, "is_available() returns bool")
 	context.assert_eq(gdk.is_initialized(), false, "is_initialized() starts false")
 	context.assert_eq(gdk.dispatch(), 0, "dispatch() safe before init")
+	context.assert_true(ProjectSettings.has_setting(INITIALIZE_ON_STARTUP_SETTING), "gdk/runtime/initialize_on_startup project setting registered")
+	context.assert_eq(bool(context.get_setting_default(INITIALIZE_ON_STARTUP_SETTING)), false, "gdk/runtime/initialize_on_startup default remains false")
+	context.assert_eq(bool(ProjectSettings.get_setting(INITIALIZE_ON_STARTUP_SETTING, false)), true, "gdk_demo sets gdk/runtime/initialize_on_startup true")
 	context.assert_true(ProjectSettings.has_setting(EMBED_DISPATCH_SETTING), "gdk/runtime/embed_dispatch project setting registered")
 	context.assert_eq(bool(ProjectSettings.get_setting(EMBED_DISPATCH_SETTING, false)), true, "gdk/runtime/embed_dispatch defaults to true")
+	context.assert_true(ProjectSettings.has_setting(AUTO_ADD_PRIMARY_USER_SETTING), "gdk/runtime/auto_add_primary_user project setting registered")
+	context.assert_eq(bool(context.get_setting_default(AUTO_ADD_PRIMARY_USER_SETTING)), false, "gdk/runtime/auto_add_primary_user default remains false")
+	context.assert_eq(bool(ProjectSettings.get_setting(AUTO_ADD_PRIMARY_USER_SETTING, false)), true, "gdk_demo sets gdk/runtime/auto_add_primary_user true")
 
 	var initialized_events: Array = []
 	var shutdown_events: Array = []
@@ -140,19 +144,19 @@ func _test_embed_dispatch_behavior(context, gdk) -> void:
 		context.set_embed_dispatch_enabled(original_embed_dispatch)
 		return
 
-	var auto_op = gdk.users.add_default_user_async()
-	context.assert_not_null(auto_op, "add_default_user_async() returns GDKAsyncOp for auto-dispatch coverage")
-	if auto_op == null:
+	var auto_signal = gdk.users.add_default_user_async()
+	context.assert_true(typeof(auto_signal) == TYPE_SIGNAL, "add_default_user_async() returns Signal for auto-dispatch coverage")
+	if typeof(auto_signal) != TYPE_SIGNAL:
 		context.reset_runtime()
 		context.set_embed_dispatch_enabled(original_embed_dispatch)
 		return
 
-	if auto_op.is_done():
+	var auto_state = context.track_signal(auto_signal)
+	if auto_state["completed"]:
 		context.log_skip("Auto-dispatch behavior", "The default-user op completed synchronously before frame-based coverage could run.")
 	else:
-		var auto_result = await context.wait_for_op_without_manual_dispatch(auto_op, 8000)
+		var auto_result = await context.wait_for_tracked_signal_without_manual_dispatch(auto_state, 8000)
 		if auto_result == null:
-			auto_op.cancel()
 			context.log_skip("Auto-dispatch behavior", "Timed out waiting for add_default_user_async() without manual GDK.dispatch().")
 		else:
 			context.log_pass("Auto-dispatch behavior", "completed without manual GDK.dispatch()")
@@ -170,25 +174,25 @@ func _test_embed_dispatch_behavior(context, gdk) -> void:
 		context.set_embed_dispatch_enabled(original_embed_dispatch)
 		return
 
-	var manual_op = gdk.users.add_default_user_async()
-	context.assert_not_null(manual_op, "add_default_user_async() returns GDKAsyncOp when embed_dispatch is disabled")
-	if manual_op == null:
+	var manual_signal = gdk.users.add_default_user_async()
+	context.assert_true(typeof(manual_signal) == TYPE_SIGNAL, "add_default_user_async() returns Signal when embed_dispatch is disabled")
+	if typeof(manual_signal) != TYPE_SIGNAL:
 		context.reset_runtime()
 		context.set_embed_dispatch_enabled(original_embed_dispatch)
 		return
 
-	if manual_op.is_done():
+	var manual_state = context.track_signal(manual_signal)
+	if manual_state["completed"]:
 		context.log_skip("Manual-dispatch fallback", "The default-user op completed synchronously before disabled-mode coverage could run.")
 	else:
 		var advanced_frames = await context.advance_process_frames(5)
 		if not advanced_frames:
 			context.log_skip("Manual-dispatch fallback", "The headless runner could not access process_frame for disabled-mode coverage.")
 		else:
-			context.assert_eq(manual_op.is_done(), false, "embed_dispatch disabled keeps async completion pending")
+			context.assert_eq(manual_state["completed"], false, "embed_dispatch disabled keeps async completion pending")
 
-			var manual_result = context.wait_for_op(manual_op, 8000)
+			var manual_result = await context.wait_for_tracked_signal(manual_state, 8000)
 			if manual_result == null:
-				manual_op.cancel()
 				context.log_skip("Manual-dispatch fallback completion", "Timed out waiting for completion after manual GDK.dispatch().")
 			else:
 				context.log_pass("Manual-dispatch fallback completion", "completed after manual GDK.dispatch()")

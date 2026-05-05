@@ -10,26 +10,26 @@
 	</tutorials>
 	<methods>
 		<method name="set_presence_async">
-			<return type="GDKAsyncOp" />
+			<return type="Signal" />
 			<param index="0" name="user" type="GDKUser" />
 			<param index="1" name="state" type="String" />
 			<param index="2" name="rich_presence" type="Dictionary" default="{}" />
 			<description>
-				Sets the presence state for the given local user. Returns a [GDKAsyncOp] that completes when the operation finishes.
+				Sets the presence state for the given local user. Await the returned completion [Signal] directly; the emitted [GDKResult] data contains the translated presence write payload.
 			</description>
 		</method>
 		<method name="clear_presence_async">
-			<return type="GDKAsyncOp" />
+			<return type="Signal" />
 			<param index="0" name="user" type="GDKUser" />
 			<description>
-				Clears the presence state for the given local user.
+				Clears the presence state for the given local user. Await the returned completion [Signal] directly.
 			</description>
 		</method>
 		<method name="get_presence_async">
-			<return type="GDKAsyncOp" />
+			<return type="Signal" />
 			<param index="0" name="xuids" type="PackedStringArray" />
 			<description>
-				Queries the presence of the specified users by XUID. Results are cached and accessible via [method get_cached_presence].
+				Queries the presence of the specified users by XUID. Await the returned completion [Signal] directly. Results are cached and accessible via [method get_cached_presence].
 			</description>
 		</method>
 		<method name="get_cached_presence">

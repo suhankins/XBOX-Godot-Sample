@@ -48,6 +48,24 @@ The build:
 - Copies built DLLs and runtime dependencies into each sample's `addons/<addon>/bin/`
 - Syncs addon metadata and editor scripts into the sample project
 
+## Clean ignored local artifacts
+
+Use the repo cleanup helper to preview or remove ignored local files such as
+`build\`, addon/sample `bin\`, sample `.godot\`, local sample configs or Godot
+editor copies under `sample\`, and generated packaging output.
+
+```powershell
+# Preview what would be removed
+.\tools\clean_repo.ps1
+
+# Remove ignored local artifacts
+.\tools\clean_repo.ps1 -Apply
+```
+
+The script wraps `git clean` in ignored-files-only mode, so tracked repository
+files stay intact. Preview first if you want to keep local sample configs or
+Godot executable copies in your worktree.
+
 ### Selective builds
 
 ```powershell

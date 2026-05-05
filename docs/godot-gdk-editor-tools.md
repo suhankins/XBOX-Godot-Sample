@@ -1,88 +1,99 @@
 # Godot GDK editor tools
 
-This document explains the editor-side pieces that ship with the `godot_gdk` addon.
+This document explains the current editor-side split between the `godot_gdk`
+runtime addon and the separate `godot_gdk_packaging` tooling addon.
 
 See also:
 
 - [`godot-gdk-plugin.md`](godot-gdk-plugin.md)
 - [`godot-gdk-build-and-loading.md`](godot-gdk-build-and-loading.md)
 
-## Editor plugin overview
+## Current state
 
-The addon still ships an editor plugin even though the native runtime implementation is still at an early runtime/users/achievements/presence/social baseline.
-
-The editor-side pieces are:
+`godot_gdk` still ships these editor-side scripts:
 
 - `gdk_editor_plugin.gd`
 - `gdk_setup_panel.gd`
 - `gdk_export_platform.gd`
 
-Together they provide:
-
-- a custom export platform for GDK packaging
-- a setup dock for local configuration
-- editor integration around sample/export settings
+However, the current editor workflow is no longer centered on a custom GDK
+export platform. The active export/package/install UI now lives in the
+separate `godot_gdk_packaging` addon.
 
 ## `gdk_editor_plugin.gd`
 
-This is the editor entry point.
+The current `godot_gdk` editor plugin is intentionally narrow.
 
-On load it:
+Today it:
 
-1. creates and registers the custom export platform
-2. creates and docks the setup panel
+- installs or updates the addon-owned `GDKBootstrap` autoload
+- does **not** register the legacy custom export platform
+- does **not** dock `gdk_setup_panel.gd`
 
-On unload it removes both.
-
-So this script is the glue between the addon metadata in `plugin.cfg` and the actual tool scripts used inside the editor.
+In other words, `gdk_editor_plugin.gd` owns startup wiring for the runtime
+addon, but it is no longer the owner of the repo's main packaging workflow.
+That responsibility moved to `godot_gdk_packaging`.
 
 ## `gdk_setup_panel.gd`
 
-This script builds a dock UI for local Partner Center configuration.
+`gdk_setup_panel.gd` remains in the addon and is still synced into the sample
+projects, but it is not auto-registered by the current editor plugin.
 
-Its job is to:
+Its job is still useful as a local configuration helper:
 
-- render a form of GDK/Xbox Live identity fields
-- load existing values from `res://sample_config.cfg`
-- save the form back to `sample_config.cfg`
+- render Partner Center identity fields
+- load and save `res://sample_config.cfg`
+- prepopulate values from `MicrosoftGame.config` when present
 - push selected values into `export_presets.cfg`
-- normalize the Title ID to 8 hex digits and reject invalid values before saving/applying
+- normalize the title id to 8 hex digits
 
-The SCID field should be treated as an override. The runtime/services path now derives the current-title SCID from the title id, so the setup panel no longer needs a manually entered SCID for the normal sample flow.
-
-In practice, this is the editor-side configuration bridge between:
-
-- local sample runtime settings
-- export preset settings
+Treat it as a retained sample/config utility rather than the primary packaging UI.
 
 ## `gdk_export_platform.gd`
 
-This script defines the custom export platform for GDK packaging.
+`gdk_export_platform.gd` is a retained implementation of the older custom
+export-platform path.
 
-At a high level it:
+It is **not** the default packaging path today. The repo now favors the
+packaging dock in `godot_gdk_packaging`, which owns the supported export,
+package, validate, install, and launch flow.
 
-1. detects the local GDK tools
-2. reads defaults from `sample_config.cfg`
-3. exposes export options in the export dialog
-4. stages a Godot export into a temporary directory
-5. copies the addon DLL into the staged build
-6. generates `MicrosoftGame.config`
-7. either:
-   - registers the loose build with `wdapp`, or
-   - packages with `makepkg`
+Keep docs and samples aligned with that newer flow unless the repo explicitly
+reintroduces the custom export-platform path.
 
-When no explicit SCID is configured, the export tooling derives the default Game OS SCID from the title id using the same null-GUID convention as the runtime.
+## `godot_gdk_packaging`
 
-So even though the gameplay-side native feature set is still early, the addon already includes editor-side configuration and packaging support for the broader GDK workflow.
+The active editor tooling for GDK packaging now lives in
+`addons\godot_gdk_packaging\editor\`.
 
-## Relationship to the current native scope
+Treat the root `addons\godot_gdk_packaging\` tree as the source of truth. The
+repo build syncs that addon into the sample mirrors under
+`sample\...\addons\godot_gdk_packaging\`, so contributors should edit the root
+addon rather than patching sample copies directly.
 
-The native runtime currently implements the runtime/users/achievements/presence/social baseline.
+That addon owns:
 
-The editor tools are therefore broader than the currently implemented runtime APIs. They remain part of the shipped addon because they support:
+- the top-level **GDK** editor menu
+- the packaging dock panel
+- export + package actions
+- install + launch actions
+- tutorial/help surfaces
+- `MicrosoftGame.config` helper flows
 
-- project configuration
-- sample setup
-- export packaging flow
+When discussing the current editor workflow, treat `godot_gdk` and
+`godot_gdk_packaging` as separate layers:
 
-That means the editor side should be thought of as addon infrastructure, not just a thin wrapper around whatever native services are currently implemented.
+- `godot_gdk` owns the runtime/services addon
+- `godot_gdk_packaging` owns the supported packaging/editor workflow
+
+## Relationship to the runtime addon
+
+The GDK runtime addon still matters to the editor story because samples and
+packaging flows need title identity and synced addon payloads, but the runtime
+addon is no longer the main place to look for packaging UI behavior.
+
+That means editor-side documentation should describe:
+
+- the retained `godot_gdk` helper scripts accurately
+- the active packaging workflow under `godot_gdk_packaging`
+- the separation between runtime/services behavior and editor tooling

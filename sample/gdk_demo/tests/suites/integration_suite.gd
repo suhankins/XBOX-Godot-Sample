@@ -19,10 +19,10 @@ func _test_signal_connectivity(context) -> void:
 
 	var users = gdk.get_users()
 	if users:
-		users.connect("user_added", func(_user): pass)
-		users.connect("user_removed", func(_local_id): pass)
-		users.connect("user_changed", func(_user): pass)
-		users.connect("primary_user_changed", func(_user): pass)
+		users.user_added.connect(func(_user): pass)
+		users.user_removed.connect(func(_local_id): pass)
+		users.user_changed.connect(func(_user, _change_kind): pass)
+		users.primary_user_changed.connect(func(_user): pass)
 		context.log_pass("GDK.users signals connectable")
 		context.disconnect_signal_handlers(users, ["user_added", "user_removed", "user_changed", "primary_user_changed"])
 

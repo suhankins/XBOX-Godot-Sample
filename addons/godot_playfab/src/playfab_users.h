@@ -19,7 +19,6 @@
 namespace godot {
 
 class PlayFab;
-class PlayFabAsyncOp;
 class PlayFabResult;
 class PlayFabRuntime;
 class PlayFabUser;
@@ -29,17 +28,11 @@ class PlayFabUsers : public RefCounted {
 
     PlayFab *m_owner = nullptr;
     std::vector<Ref<PlayFabUser>> m_users;
-    bool m_runtime_ready = false;
-    bool m_change_event_registered = false;
-    XTaskQueueRegistrationToken m_change_token = {};
-
-    static void CALLBACK _user_change_callback(void *p_context, XUserLocalId p_user_local_id, XUserChangeEvent p_event);
 
     PlayFabRuntime *_get_runtime() const;
     static bool _try_get_local_id_from_variant(const Variant &p_user_or_local_id, XUserLocalId *r_local_id, String *r_error = nullptr);
-    bool _upsert_user(const Ref<PlayFabUser> &p_user);
+    bool _add_or_update_user(const Ref<PlayFabUser> &p_user);
     Ref<PlayFabUser> _find_user_by_local_id(XUserLocalId p_user_local_id) const;
-    void _remove_user_by_local_id(XUserLocalId p_user_local_id);
 
 protected:
     static void _bind_methods();
@@ -50,13 +43,12 @@ public:
     Ref<PlayFabResult> on_runtime_initialized();
     void shutdown();
 
-    Ref<PlayFabAsyncOp> sign_in_async(const Variant &p_user_or_local_id, bool p_create_account = true);
+    Signal sign_in_async(const Variant &p_user_or_local_id, bool p_create_account = true);
     Ref<PlayFabUser> get_user_by_local_id(int64_t p_local_id) const;
     Ref<PlayFabUser> get_user(const Variant &p_user_or_local_id) const;
     Array get_users() const;
-    bool upsert_user_session(const Ref<PlayFabUser> &p_user);
+    bool add_or_update_user_session(const Ref<PlayFabUser> &p_user);
 
-    void on_user_change(XUserLocalId p_user_local_id, XUserChangeEvent p_event);
 };
 
 } // namespace godot

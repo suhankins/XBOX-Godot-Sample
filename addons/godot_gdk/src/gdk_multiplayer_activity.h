@@ -22,7 +22,7 @@
 namespace godot {
 
 class GDK;
-class GDKAsyncOp;
+class GDKPendingSignal;
 class GDKResult;
 class GDKRuntime;
 class GDKUser;
@@ -88,7 +88,7 @@ public:
     void shutdown();
     void on_user_removed(const Ref<GDKUser> &p_user);
 
-    Ref<GDKAsyncOp> set_activity_async(
+    Signal set_activity_async(
             const Ref<GDKUser> &p_user,
             const String &p_connection_string,
             const String &p_join_restriction = "followed",
@@ -96,26 +96,26 @@ public:
             int64_t p_current_players = 0,
             const String &p_group_id = String(),
             bool p_allow_cross_platform_join = false);
-    Ref<GDKAsyncOp> get_activities_async(const Ref<GDKUser> &p_user, const PackedStringArray &p_xuids);
+    Signal get_activities_async(const Ref<GDKUser> &p_user, const PackedStringArray &p_xuids);
     Ref<GDKMultiplayerActivityInfo> get_cached_activity(const String &p_xuid) const;
-    Ref<GDKAsyncOp> delete_activity_async(const Ref<GDKUser> &p_user);
-    Ref<GDKAsyncOp> send_invites_async(
+    Signal delete_activity_async(const Ref<GDKUser> &p_user);
+    Signal send_invites_async(
             const Ref<GDKUser> &p_user,
             const PackedStringArray &p_xuids,
             bool p_allow_cross_platform_join = true,
             const String &p_connection_string = String());
-    Ref<GDKAsyncOp> show_invite_ui_async(const Ref<GDKUser> &p_user);
+    Signal show_invite_ui_async(const Ref<GDKUser> &p_user);
     Ref<GDKResult> update_recent_players(
             const Ref<GDKUser> &p_user,
             const PackedStringArray &p_xuids,
             const String &p_encounter_type = "default");
-    Ref<GDKAsyncOp> flush_recent_players_async(const Ref<GDKUser> &p_user);
+    Signal flush_recent_players_async(const Ref<GDKUser> &p_user);
     Ref<GDKResult> accept_pending_invite(const String &p_invite_uri);
 
     GDKRuntime *get_runtime_internal() const;
     GDKXboxServices *get_xbox_services_internal() const;
-    Ref<GDKAsyncOp> make_completed_async_op_internal(const Ref<GDKResult> &p_result) const;
-    Ref<GDKAsyncOp> make_error_async_op_internal(
+    Signal make_completed_signal_internal(const Ref<GDKResult> &p_result) const;
+    Signal make_error_signal_internal(
             HRESULT p_hresult,
             const String &p_code,
             const String &p_message,

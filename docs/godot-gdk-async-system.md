@@ -14,9 +14,10 @@ The current baseline gives us:
 
 - one root singleton: `GDK`
 - one shared native async runtime: `GDKRuntime`
-- two script-facing one-shot op types: `GDKAsyncOp` and `GDKDispatchOp`
+- one script-facing one-shot completion shape: `Signal`
 - one normalized result type: `GDKResult`
-- one internal `XAsync` bridge base: `GDKXAsyncContext`
+- one internal `XAsync` bridge base: `GDKSignalXAsyncContext`
+- one internal one-shot signal helper: `GDKPendingSignal`
 - one internal Xbox services scaffold: `GDKXboxServices`
 - four concrete services using the pattern: `GDK.users`, `GDK.achievements`, `GDK.presence`, and `GDK.social`
 
@@ -52,21 +53,21 @@ Current public signals:
 
 Current public methods:
 
-- `add_default_user_async(allow_guests := false) -> GDKAsyncOp`
-- `add_user_with_ui_async() -> GDKAsyncOp`
+- `add_default_user_async() -> Signal`
+- `add_user_with_ui_async() -> Signal`
 - `get_primary_user() -> GDKUser`
 - `get_users() -> Array`
-- `check_privilege_async(user, privilege) -> GDKAsyncOp`
-- `resolve_privilege_with_ui_async(user, privilege) -> GDKAsyncOp`
-- `resolve_issue_with_ui_async(user, url := "") -> GDKAsyncOp`
-- `get_gamer_picture_async(user, size := "medium") -> GDKAsyncOp`
-- `get_token_and_signature_async(user, method, url, headers := {}, body := PackedByteArray(), force_refresh := false) -> GDKAsyncOp`
+- `check_privilege_async(user, privilege) -> Signal`
+- `resolve_privilege_with_ui_async(user, privilege) -> Signal`
+- `resolve_issue_with_ui_async(user, url := "") -> Signal`
+- `get_gamer_picture_async(user, size := "medium") -> Signal`
+- `get_token_and_signature_async(user, method, url, headers := {}, body := PackedByteArray(), force_refresh := false) -> Signal`
 
 Current public signals:
 
 - `user_added(user: GDKUser)`
 - `user_removed(local_id: int)`
-- `user_changed(user: GDKUser)`
+- `user_changed(user: GDKUser, change_kind: String)`
 - `primary_user_changed(user: GDKUser)`
 
 Current `GDKUser` getters:
@@ -88,8 +89,8 @@ Current `GDKUser` getters:
 
 Current public methods:
 
-- `query_player_achievements_async(user) -> GDKDispatchOp`
-- `update_achievement_async(user, achievement_id, percent_complete) -> GDKDispatchOp`
+- `query_player_achievements_async(user) -> Signal`
+- `update_achievement_async(user, achievement_id, percent_complete) -> Signal`
 - `get_cached_achievements(user) -> Array`
 
 Current public signals:
@@ -103,9 +104,9 @@ Current public signals:
 
 Current public methods:
 
-- `set_presence_async(user, state, rich_presence := {}) -> GDKAsyncOp`
-- `clear_presence_async(user) -> GDKAsyncOp`
-- `get_presence_async(xuids) -> GDKAsyncOp`
+- `set_presence_async(user, state, rich_presence := {}) -> Signal`
+- `clear_presence_async(user) -> Signal`
+- `get_presence_async(xuids) -> Signal`
 - `get_cached_presence(xuid) -> GDKPresenceRecord`
 
 Current public signals:
@@ -126,7 +127,7 @@ Current public methods:
 
 - `start_social_graph(user) -> GDKResult`
 - `stop_social_graph(user) -> void`
-- `get_friends_async(user) -> GDKAsyncOp`
+- `get_friends_async(user) -> Signal`
 - `create_social_group(user, filter := null) -> GDKSocialGroup`
 - `create_social_group_from_xuids(user, xuids) -> GDKSocialGroup`
 - `destroy_social_group(group) -> void`
@@ -138,33 +139,15 @@ Current public signals:
 - `social_group_updated(group: GDKSocialGroup)`
 - `social_user_changed(xuid: String, social_user: GDKSocialUser)`
 
-### `GDKAsyncOp`
+### Completion signals
 
-`GDKAsyncOp` is the script-visible wrapper for one-shot work backed by a native `XAsyncBlock`.
-
-It provides:
-
-- `completed(result: GDKResult)`
-- `is_done() -> bool`
-- `cancel() -> bool`
-- `get_result() -> GDKResult`
+Every one-shot async API now returns a completion `Signal` that emits exactly one `GDKResult`.
 
 Important behaviors:
 
-- XAsync-backed one-shot wrappers return a `GDKAsyncOp`
-- immediate failures still return an op
-- `cancel()` is best effort
-- `completed` is emitted exactly once
-
-### `GDKDispatchOp`
-
-`GDKDispatchOp` is the script-visible wrapper for one-shot work that completes from service-managed dispatch state rather than from a native `XAsyncBlock`.
-
-It inherits the same `completed(result)`, `is_done()`, `cancel()`, and `get_result()` surface as `GDKAsyncOp`, but its cancel path is different:
-
-- it unregisters itself from the service's pending dispatch state immediately
-- it completes with a cancelled `GDKResult` right away
-- it is intended for manager/event-driven systems such as Achievements Manager and Social Manager-backed waits
+- callers `await service.method_async()` directly
+- immediate failures still return a completion signal
+- same-turn completion is deferred so the returned signal cannot be missed
 
 ### `GDKResult`
 
@@ -188,23 +171,20 @@ Fields:
   Root singleton. Owns `GDKRuntime`, `GDKXboxServices`, `GDKUsers`, `GDKAchievements`, `GDKPresence`, and `GDKSocial`.
 
 - `gdk_runtime.cpp` / `gdk_runtime.h`  
-  Shared GDK runtime owner. Creates the queue, retains active ops, dispatches completions, and shuts everything down safely.
+  Shared GDK runtime owner. Creates the queue, retains active pending signals, dispatches completions, and shuts everything down safely.
 
 - `gdk_xbox_services.cpp` / `gdk_xbox_services.h`
   Shared Xbox services bootstrap. Derives the current-title SCID from `XGameGetXboxTitleId()`, initializes XSAPI, and caches per-user `XblContextHandle` objects.
 
 ### Generic async layer
 
-- `gdk_result.cpp` / `gdk_result.h`  
+- `gdk_result.cpp` / `gdk_result.h`
   Shared result type and HRESULT formatting helpers.
 
-- `gdk_async_op.cpp` / `gdk_async_op.h`  
-  Shared XAsync-backed one-shot operation wrapper with completion, cancel, and release hooks.
+- `gdk_pending_signal.cpp` / `gdk_pending_signal.h`
+  Internal one-shot completion emitter retained by the runtime until completion.
 
-- `gdk_dispatch_op.cpp` / `gdk_dispatch_op.h`
-  Shared dispatch-backed one-shot operation wrapper for manager/event-driven service waits.
-
-- `gdk_xasync_context.cpp` / `gdk_xasync_context.h`  
+- `gdk_signal_xasync_context.cpp` / `gdk_signal_xasync_context.h`
   Internal base class that owns one `XAsyncBlock`, binds it to the shared queue, wires cancellation, and forwards the raw block to the operation-specific finalizer.
 
 ### Current concrete services
@@ -213,16 +193,16 @@ Fields:
   `GDKUser`, `GDKUsers`, and the first concrete `XAsync` bridge context (`AddUserAsyncContext`).
 
 - `gdk_achievement.cpp` / `gdk_achievement.h`
-  `GDKAchievement`, `GDKAchievements`, the Achievements Manager cache, and manager-driven `GDKDispatchOp` completion.
+  `GDKAchievement`, `GDKAchievements`, the Achievements Manager cache, and manager-driven completion signals.
 
 - `gdk_presence.cpp` / `gdk_presence.h`
   `GDKPresence`, `GDKPresenceRecord`, the presence cache, and XAsync-backed presence set/clear/query flows.
 
 - `gdk_social.cpp` / `gdk_social.h`
-  `GDKSocial`, `GDKSocialFilter`, `GDKSocialGroup`, `GDKSocialUser`, and Social Manager-backed dispatch completion.
+  `GDKSocial`, `GDKSocialFilter`, `GDKSocialGroup`, `GDKSocialUser`, and Social Manager-backed completion signals.
 
 - `register_types.cpp`  
-  Registers `GDK`, `GDKUsers`, `GDKUser`, `GDKAchievements`, `GDKAchievement`, `GDKPresence`, `GDKPresenceRecord`, `GDKSocial`, `GDKSocialFilter`, `GDKSocialGroup`, `GDKSocialUser`, `GDKAsyncOp`, `GDKDispatchOp`, and `GDKResult`, then publishes the `GDK` singleton.
+  Registers `GDK`, `GDKUsers`, `GDKUser`, `GDKAchievements`, `GDKAchievement`, `GDKPresence`, `GDKPresenceRecord`, `GDKSocial`, `GDKSocialFilter`, `GDKSocialGroup`, `GDKSocialUser`, `GDKMultiplayerActivity`, `GDKMultiplayerActivityInfo`, and `GDKResult`, then publishes the `GDK` singleton.
 
 ## Core model
 
@@ -261,13 +241,13 @@ For Xbox services features, `GDK.dispatch()` also pumps manager-driven state lik
 
 ### 2. One `XAsyncBlock` per XAsync-backed request
 
-Each concrete async request gets its own heap-allocated context object derived from `GDKXAsyncContext`.
+Each concrete async request gets its own heap-allocated context object derived from `GDKSignalXAsyncContext` or completes through service-owned pending-signal state.
 
 That base class owns:
 
 - one `XAsyncBlock`
 - the shared runtime pointer
-- the `GDKAsyncOp`
+- the `GDKPendingSignal`
 
 Its constructor sets:
 
@@ -278,8 +258,8 @@ Its constructor sets:
 The important part is what the thunk does:
 
 ```cpp
-void CALLBACK GDKXAsyncContext::_completion_thunk(XAsyncBlock *p_async_block) {
-    auto *context = static_cast<GDKXAsyncContext *>(p_async_block->context);
+void CALLBACK GDKSignalXAsyncContext::_completion_thunk(XAsyncBlock *p_async_block) {
+    auto *context = static_cast<GDKSignalXAsyncContext *>(p_async_block->context);
 
     context->clear_cancel_handler();
     context->finalize(p_async_block);
@@ -297,9 +277,9 @@ That is intentional. Each GDK async API has its own result contract:
 
 So the base layer only handles lifetime, queue binding, and cancellation plumbing. The service-specific context owns result extraction.
 
-### 3. `GDKRuntime` retains active ops
+### 3. `GDKRuntime` retains active requests
 
-`GDKRuntime::retain_op()` keeps strong references to in-flight one-shot ops. Today that means `GDKAsyncOp` plus `GDKDispatchOp`, which inherits the same retention/release mechanics.
+`GDKRuntime::retain_pending_signal()` keeps strong references to in-flight requests so GDScript can safely fire-and-forget signal-returning calls.
 
 That matters because script is allowed to fire-and-forget:
 
@@ -307,9 +287,9 @@ That matters because script is allowed to fire-and-forget:
 GDK.users.add_default_user_async()
 ```
 
-If the runtime did not retain the op, it could be destroyed before completion.
+If the runtime did not retain the request, it could be destroyed before completion.
 
-When an op completes, `GDKAsyncOp::complete()` runs its release hook and `GDKRuntime::release_op()` drops the retained reference.
+When a request completes, `GDKPendingSignal::complete()` runs its release hook and `GDKRuntime::release_pending_signal()` drops the retained reference.
 
 ### 4. Xbox services bootstrap is shared
 
@@ -331,9 +311,9 @@ This is the current end-to-end flow for `GDK.users.add_default_user_async()`:
 
 1. GDScript calls `GDK.users.add_default_user_async()`.
 2. `GDKUsers::_start_add_user_async()` checks that the runtime is initialized.
-3. If the runtime is unavailable, it returns an already-completed error op using `GDKRuntime::make_error_async_op()`.
+3. If the runtime is unavailable, it returns an already-scheduled error signal using `GDKRuntime::make_error_signal()`.
 4. Otherwise it:
-   - instantiates `GDKAsyncOp`
+   - instantiates `GDKPendingSignal`
    - asks `GDKRuntime` to retain it
    - allocates `AddUserAsyncContext`
    - binds cancellation through `XAsyncCancel`
@@ -341,20 +321,20 @@ This is the current end-to-end flow for `GDK.users.add_default_user_async()`:
 5. GDK performs the work on the queue's work port.
 6. Completion lands on the queue's completion port.
 7. The completion only becomes visible when `GDK.dispatch()` pumps the queue.
-8. `GDKXAsyncContext::_completion_thunk()` forwards the raw `XAsyncBlock` to `AddUserAsyncContext::finalize(...)`.
+8. `GDKSignalXAsyncContext::_completion_thunk()` forwards the raw `XAsyncBlock` to `AddUserAsyncContext::finalize(...)`.
 9. `AddUserAsyncContext::finalize(...)` calls:
 
 ```cpp
 XUserAddResult(p_async_block, &user_handle)
 ```
 
-10. `GDKUsers::complete_add_user(...)` wraps the native handle in a `GDKUser`, updates service state, emits service signals, and only then completes the op with:
+10. `GDKUsers::complete_add_user(...)` wraps the native handle in a `GDKUser`, updates service state, emits service signals, and only then completes the returned signal with:
 
 ```cpp
 GDKResult::ok_result(user)
 ```
 
-11. `GDKAsyncOp::complete()` emits `completed(result)`.
+11. `GDKPendingSignal::complete()` emits `completed(result)`.
 12. The runtime release hook drops the retained strong reference.
 
 ## Users service state
@@ -377,13 +357,13 @@ On successful user add:
    - sign-in state
    - store-user state
 3. `GDKUsers::complete_add_user()` updates the cache and emits:
-   - `user_added` or `user_changed`
-   - `primary_user_changed` if needed
-4. only after those updates does it complete the `GDKAsyncOp`
+   - `user_added` or `user_changed(user, "signed_in_again")`
+   - `primary_user_changed` only when the session primary user is first established
+4. only after those updates does it complete the returned signal
 
-That ordering is important. Future services should follow the same rule: update cache first, then complete the op.
+That ordering is important. Future services should follow the same rule: update cache first, then complete the returned request.
 
-The newer users-service one-shot requests (`resolve_privilege_with_ui_async()`, `resolve_issue_with_ui_async()`, `get_gamer_picture_async()`, and `get_token_and_signature_async()`) reuse that same retained `GDKAsyncOp` + `GDKXAsyncContext` pattern. The only difference is the payload translation that happens in the concrete finalizer: `Dictionary` for privilege/token results and `Image` for gamer pictures.
+The newer users-service one-shot requests (`resolve_privilege_with_ui_async()`, `resolve_issue_with_ui_async()`, `get_gamer_picture_async()`, and `get_token_and_signature_async()`) now reuse that same retained `GDKPendingSignal` + `GDKSignalXAsyncContext` pattern. The only difference is the payload translation that happens in the concrete finalizer: `Dictionary` for privilege/token results and `Image` for gamer pictures.
 
 ## Achievements service state
 
@@ -394,52 +374,37 @@ The newer users-service one-shot requests (`resolve_privilege_with_ui_async()`, 
 - pending query ops waiting for `LocalUserInitialStateSynced`
 - pending update ops waiting for `AchievementProgressUpdated` or `AchievementUnlocked`
 
-Unlike `GDK.users`, this service does not create an `XAsyncBlock` per request. Instead, it adapts Achievements Manager's cache-and-event model into a dispatch-backed `GDKDispatchOp` contract:
+Unlike `GDK.users`, this service does not create an `XAsyncBlock` per request. Instead, it adapts Achievements Manager's cache-and-event model into a completion-signal contract:
 
 1. script requests a query or update
 2. the service ensures the user is registered with Achievements Manager
-3. the service returns a retained `GDKDispatchOp`
+3. the service returns a retained completion signal
 4. `GDK.dispatch()` pumps `XblAchievementsManagerDoWork()`
 5. manager events update the service cache
 6. service signals are emitted
-7. the pending `GDKDispatchOp` completes
+7. the pending completion signal resolves
 
 That is the concrete example of the "manager state instead of a classic async result payload" rule described earlier.
 
 ## Cancellation and shutdown
 
-### Operation cancellation
+### Request cancellation
 
-`GDKAsyncOp::cancel()` only marks the op once and then calls the context-specific cancel handler.
+`GDKPendingSignal` owns the shared cancel state for in-flight requests.
 
-For `GDKXAsyncContext`, that handler is:
-
-```cpp
-XAsyncCancel(&m_async_block)
-```
-
-The operation-specific finalizer is still responsible for interpreting cancellation correctly. In the users path:
-
-- an explicit cancel request becomes `GDKResult::cancelled(...)`
-- `E_ABORT` from `XUserAddResult(...)` also becomes `GDKResult::cancelled(...)`
-
-`GDKDispatchOp::cancel()` is intentionally different. Because manager-backed waits do not own a native `XAsyncBlock`, cancel:
-
-1. unregisters the op from the owning service's pending dispatch state
-2. completes the op immediately with `GDKResult::cancelled(...)`
-
-That gives Achievements Manager-style waits deterministic local cancellation instead of leaving them parked until some future manager event happens to arrive.
+- For `GDKSignalXAsyncContext`, cancellation calls `XAsyncCancel(&m_async_block)`.
+- For manager-driven waits such as achievements and social friends queries, the cancel handler removes the pending request from service-owned state and completes it with `GDKResult::cancelled(...)`.
 
 ### Runtime shutdown
 
 `GDKRuntime::shutdown()`:
 
 1. marks the runtime as shutting down
-2. cancels every retained active op
+2. cancels every retained pending request
 3. calls `XTaskQueueTerminate(...)`
 4. dispatches the completion port until the queue termination callback fires
 5. closes the queue handle
-6. clears retained ops
+6. clears retained pending requests
 7. calls `XGameRuntimeUninitialize()`
 
 Because the runtime sets `m_shutting_down` first, service finalizers can refuse to mutate state during teardown.
@@ -448,7 +413,7 @@ Because the runtime sets `m_shutting_down` first, service finalizers can refuse 
 
 This is the most important implementation rule for future work.
 
-`GDKXAsyncContext` is intentionally **not** a generic result decoder. It should not assume that:
+`GDKSignalXAsyncContext` is intentionally **not** a generic result decoder. It should not assume that:
 
 - `XAsyncGetStatus()` is the real result contract
 - a single status check is enough to finish every operation
@@ -467,17 +432,17 @@ Future wrappers should follow the same pattern.
 
 When adding a new one-shot wrapper, follow this checklist:
 
-1. Decide whether the wrapper is `XAsync`-backed or dispatch-backed.
-2. For `XAsync`-backed work, add the public service method that returns `GDKAsyncOp`.
-3. Create a service-specific context derived from `GDKXAsyncContext`.
+1. Decide whether the wrapper is `XAsync`-backed or manager/dispatch-backed.
+2. Add the public service method that returns a completion `Signal`.
+3. For `XAsync`-backed work, create a service-specific context derived from `GDKSignalXAsyncContext`.
 4. In `finalize(XAsyncBlock *p_async_block)`, call the API-specific result functions.
 5. Translate native payloads into Godot wrappers or Variants.
 6. Update service-owned cache/state first.
 7. Emit service-level signals next.
-8. Complete the `GDKAsyncOp` last.
-9. Use `GDKRuntime::make_error_async_op()` for immediate startup/availability failures.
+8. Complete the returned signal last.
+9. Use `GDKRuntime::make_error_signal()` for immediate startup/availability failures.
 
-For manager/event-driven waits like achievements and future social-manager-backed flows, return `GDKDispatchOp` instead, store it in service-owned pending state, and use a cancel handler that unregisters it immediately when script calls `cancel()`.
+For manager/event-driven waits like achievements and social friends queries, store a retained `GDKPendingSignal` in service-owned pending state and use a cancel handler that unregisters it immediately if the request is cancelled during teardown.
 
 ## Current scope
 
@@ -487,8 +452,8 @@ Today the system covers:
 
 - runtime bootstrap and shutdown
 - shared queue ownership
-- async op/result wrappers
+- retained pending-signal/result wrappers
 - one reusable `XAsync` context base
-- the users baseline
+- the users, achievements, presence, social, and multiplayer-activity services
 
-It does **not** yet implement every service namespace from the spec (`save`, `stats`, and `leaderboards` are still missing), but presence and social now reuse the same shared async/dispatch pattern beside users and achievements.
+It does **not** yet implement every service namespace from the spec (`save`, `stats`, and `leaderboards` are still missing), but the current services now share the same completion-signal pattern end to end.

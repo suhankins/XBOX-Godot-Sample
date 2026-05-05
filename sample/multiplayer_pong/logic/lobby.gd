@@ -16,7 +16,7 @@ const DEFAULT_PORT = 8910
 var peer: ENetMultiplayerPeer
 var _title_hue := 0.0
 var _signed_in := false
-var _sign_in_op = null
+var _sign_in_in_progress := false
 
 func _ready() -> void:
 	multiplayer.peer_connected.connect(_player_connected)
@@ -124,6 +124,9 @@ func _refresh_xbox_state() -> void:
 
 
 func _on_sign_in_pressed() -> void:
+	if _sign_in_in_progress:
+		return
+
 	var gdk = _get_gdk()
 	if gdk == null or not gdk.is_initialized():
 		return
@@ -131,19 +134,13 @@ func _on_sign_in_pressed() -> void:
 	sign_in_button.disabled = true
 	sign_in_button.text = "Signing in..."
 
-	_sign_in_op = gdk.users.add_user_with_ui_async()
-	if _sign_in_op == null:
-		sign_in_button.text = "Sign In to Xbox"
-		sign_in_button.disabled = false
-		return
-
-	if _sign_in_op.is_done():
-		_on_sign_in_completed(_sign_in_op.get_result())
-	else:
-		_sign_in_op.completed.connect(_on_sign_in_completed)
+	_sign_in_in_progress = true
+	var sign_in_signal: Signal = gdk.users.add_user_with_ui_async()
+	sign_in_signal.connect(_on_sign_in_completed, CONNECT_ONE_SHOT)
 
 
 func _on_sign_in_completed(result) -> void:
+	_sign_in_in_progress = false
 	if result != null and result.ok:
 		_set_status("Signed in!", true)
 	else:

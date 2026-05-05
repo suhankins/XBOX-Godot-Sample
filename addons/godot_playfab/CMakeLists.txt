@@ -15,8 +15,8 @@ add_library(godot_playfab SHARED
     src/playfab_gamesaves.cpp
     src/playfab_runtime.cpp
     src/playfab_result.cpp
-    src/playfab_async_op.cpp
-    src/playfab_xasync_context.cpp
+    src/playfab_pending_signal.cpp
+    src/playfab_signal_xasync_context.cpp
     src/playfab_user.cpp
     src/playfab_users.cpp
     src/playfab_leaderboards.cpp

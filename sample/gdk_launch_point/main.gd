@@ -70,10 +70,6 @@ var _selected_entry: Dictionary = {}
 var _event_log_lines: Array[String] = []
 var _demo_achievement_id = DEFAULT_ACHIEVEMENT_ID
 var _last_selected_status = ""
-var _mpa_set_op = null
-var _mpa_get_op = null
-var _mpa_delete_op = null
-var _mpa_invite_ui_op = null
 var _last_mpa_event_text = "No invite events yet."
 
 func _gdk():
@@ -167,8 +163,8 @@ func _build_scenario_catalog() -> Dictionary:
 				"Users",
 				"Explore the current GDK users surface with explicit sign-in and profile scenarios.",
 				[
-					_scenario("users_silent_sign_in", "Silent Sign-In", "Attempt add_default_user_async() and track the returned GDKAsyncOp.", Callable(self, "_scenario_silent_sign_in")),
-					_scenario("users_sign_in_ui", "User Picker", "Launch add_user_with_ui_async() for an explicit sign-in or user switch flow.", Callable(self, "_scenario_sign_in_with_ui")),
+					_scenario("users_silent_sign_in", "Silent Sign-In", "Attempt add_default_user_async() for a non-guest silent sign-in and track the returned completion signal.", Callable(self, "_scenario_silent_sign_in")),
+					_scenario("users_sign_in_ui", "User Picker", "Launch add_user_with_ui_async() for an explicit sign-in or guest-capable picker flow. This does not replace the session primary user once one is established.", Callable(self, "_scenario_sign_in_with_ui")),
 					_scenario("users_summary", "Log User Summary", "Log the current primary user plus the signed-in user count.", Callable(self, "_scenario_log_user_summary")),
 					_scenario("users_gamer_picture", "Load Gamer Picture", "Request the primary user's gamer picture and log the returned image details.", Callable(self, "_scenario_load_gamer_picture"))
 				]
@@ -662,17 +658,20 @@ func _describe_value(value) -> String:
 		return value.get_class()
 	return str(value)
 
-func _track_async_op(entry: Dictionary, op, label: String, on_complete: Callable = Callable()) -> void:
-	if op == null:
-		var status = "%s did not return an operation." % label
+func _track_async_op(entry: Dictionary, async_signal, label: String, on_complete: Callable = Callable()) -> void:
+	if async_signal == null:
+		var status = "%s did not return a request." % label
 		_log_event(status)
 		_set_selected_status(entry, status)
 		return
 
-	if op.is_done():
-		_on_async_operation_completed(op.get_result(), entry, label, on_complete)
-	else:
-		op.completed.connect(_on_async_operation_completed.bind(entry, label, on_complete), CONNECT_ONE_SHOT)
+	if typeof(async_signal) == TYPE_SIGNAL:
+		async_signal.connect(_on_async_operation_completed.bind(entry, label, on_complete), CONNECT_ONE_SHOT)
+		return
+
+	var status = "%s did not return a completion signal." % label
+	_log_event(status)
+	_set_selected_status(entry, status)
 
 func _on_async_operation_completed(result, entry: Dictionary, label: String, on_complete: Callable) -> void:
 	var status = _describe_result(result)
@@ -872,7 +871,6 @@ func _scenario_set_mpa_activity() -> void:
 		DEMO_MPA_GROUP_ID,
 		false
 	)
-	_mpa_set_op = op
 	_track_async_op(entry, op, "Set Local Activity", Callable(self, "_after_mpa_set"))
 
 func _after_mpa_set(_result) -> void:
@@ -893,7 +891,6 @@ func _scenario_refresh_mpa_activity() -> void:
 		return
 
 	var op = gdk.multiplayer_activity.get_activities_async(user, [user.xuid])
-	_mpa_get_op = op
 	_track_async_op(entry, op, "Refresh Local Activity", Callable(self, "_after_mpa_refresh"))
 
 func _after_mpa_refresh(_result) -> void:
@@ -927,7 +924,6 @@ func _scenario_show_mpa_invite_ui() -> void:
 		return
 
 	var op = gdk.multiplayer_activity.show_invite_ui_async(user)
-	_mpa_invite_ui_op = op
 	_track_async_op(entry, op, "Show Invite UI", Callable(self, "_after_mpa_invite_ui"))
 
 func _after_mpa_invite_ui(_result) -> void:
@@ -948,7 +944,6 @@ func _scenario_clear_mpa_activity() -> void:
 		return
 
 	var op = gdk.multiplayer_activity.delete_activity_async(user)
-	_mpa_delete_op = op
 	_track_async_op(entry, op, "Clear Local Activity", Callable(self, "_after_mpa_clear"))
 
 func _after_mpa_clear(_result) -> void:
@@ -970,8 +965,8 @@ func _on_user_added(user) -> void:
 	_log_event("User added: %s" % user.gamertag)
 	_refresh_state_panel()
 
-func _on_user_changed(user) -> void:
-	_log_event("User changed: %s" % user.gamertag)
+func _on_user_changed(user, change_kind: String) -> void:
+	_log_event("User changed (%s): %s" % [change_kind, user.gamertag])
 	_refresh_state_panel()
 
 func _on_user_removed(local_id: int) -> void:

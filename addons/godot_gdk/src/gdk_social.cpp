@@ -7,8 +7,7 @@
 #include <cstring>
 
 #include "gdk.h"
-#include "gdk_async_op.h"
-#include "gdk_dispatch_op.h"
+#include "gdk_pending_signal.h"
 #include "gdk_result.h"
 #include "gdk_runtime.h"
 #include "gdk_user.h"
@@ -660,16 +659,14 @@ void GDKSocial::stop_social_graph(const Ref<GDKUser> &p_user) {
     _erase_local_user_state(local_id);
 }
 
-Ref<GDKAsyncOp> GDKSocial::get_friends_async(const Ref<GDKUser> &p_user) {
+Signal GDKSocial::get_friends_async(const Ref<GDKUser> &p_user) {
     LocalUserState *state = nullptr;
     Ref<GDKResult> ensure_result = _ensure_local_user_state(p_user, &state, true);
     if (!ensure_result->is_ok()) {
-        Ref<GDKDispatchOp> error_dispatch_op = _make_error_dispatch_op(
+        return _make_error_signal(
                 static_cast<HRESULT>(ensure_result->get_hresult()),
                 ensure_result->get_code(),
                 ensure_result->get_message());
-        Ref<GDKAsyncOp> error_op = error_dispatch_op;
-        return error_op;
     }
 
     if (!state->friends_group.is_valid()) {
@@ -679,35 +676,30 @@ Ref<GDKAsyncOp> GDKSocial::get_friends_async(const Ref<GDKUser> &p_user) {
         filter->set_relationship_filter(GDKSocialFilter::RELATIONSHIP_FILTER_FRIENDS);
         state->friends_group = create_social_group(state->user, filter);
         if (!state->friends_group.is_valid()) {
-            Ref<GDKDispatchOp> error_dispatch_op = _make_error_dispatch_op(E_FAIL, "friends_group_create_failed", "Failed to create the default friends social group.");
-            Ref<GDKAsyncOp> error_op = error_dispatch_op;
-            return error_op;
+            return _make_error_signal(E_FAIL, "friends_group_create_failed", "Failed to create the default friends social group.");
         }
     }
 
     if (state->friends_group->is_loaded()) {
-        Ref<GDKAsyncOp> op = _get_runtime()->make_completed_async_op(GDKResult::ok_result(state->friends_group));
-        return op;
+        return _make_completed_signal(GDKResult::ok_result(state->friends_group));
     }
 
-    Ref<GDKDispatchOp> op;
-    op.instantiate();
-    _get_runtime()->retain_op(op);
+    GDKRuntime *runtime = _get_runtime();
+    Ref<GDKPendingSignal> pending_signal = runtime != nullptr ? runtime->make_pending_signal() : Ref<GDKPendingSignal>();
+    ERR_FAIL_COND_V(pending_signal.is_null(), Signal());
 
     PendingFriendsOp pending_op;
     pending_op.local_id = state->local_id;
     pending_op.group_handle = state->friends_group->get_handle();
-    pending_op.op = op;
+    pending_op.request = pending_signal;
     m_pending_friend_ops.push_back(pending_op);
 
-    GDKDispatchOp *op_ptr = op.ptr();
-    op->set_cancel_message("Friends query cancelled.");
-    op->set_cancel_handler([this, op_ptr]() {
-        _cancel_pending_friend_op(op_ptr);
+    GDKPendingSignal *pending_signal_ptr = pending_signal.ptr();
+    pending_signal->set_cancel_handler([this, pending_signal_ptr]() {
+        _cancel_pending_friend_signal(pending_signal_ptr);
     });
 
-    Ref<GDKAsyncOp> async_op = op;
-    return async_op;
+    return pending_signal->get_completed_signal();
 }
 
 Ref<GDKSocialGroup> GDKSocial::create_social_group(const Ref<GDKUser> &p_user, const Ref<GDKSocialFilter> &p_filter) {
@@ -838,15 +830,26 @@ GDKPresence *GDKSocial::_get_presence_service() const {
     return presence.ptr();
 }
 
-Ref<GDKDispatchOp> GDKSocial::_make_error_dispatch_op(HRESULT p_hresult, const String &p_code, const String &p_message) const {
-    if (m_owner != nullptr) {
-        return m_owner->make_dispatch_error_op(p_hresult, p_code, p_message);
+Signal GDKSocial::_make_completed_signal(const Ref<GDKResult> &p_result) const {
+    GDKRuntime *runtime = _get_runtime();
+    Ref<GDKPendingSignal> pending_signal = runtime != nullptr ? runtime->make_pending_signal() : Ref<GDKPendingSignal>();
+    if (pending_signal.is_null()) {
+        pending_signal.instantiate();
+    }
+    pending_signal->complete_deferred(p_result);
+    return pending_signal->get_completed_signal();
+}
+
+Signal GDKSocial::_make_error_signal(HRESULT p_hresult, const String &p_code, const String &p_message) const {
+    GDKRuntime *runtime = _get_runtime();
+    if (runtime != nullptr) {
+        return runtime->make_error_signal(p_hresult, p_code, p_message);
     }
 
-    Ref<GDKDispatchOp> op;
-    op.instantiate();
-    op->complete(GDKResult::error_result(p_hresult, p_code, p_message));
-    return op;
+    Ref<GDKPendingSignal> pending_signal;
+    pending_signal.instantiate();
+    pending_signal->complete_deferred(GDKResult::error_result(p_hresult, p_code, p_message));
+    return pending_signal->get_completed_signal();
 }
 
 Ref<GDKResult> GDKSocial::_ensure_local_user_state(const Ref<GDKUser> &p_user, LocalUserState **r_state, bool p_auto_start) {
@@ -1009,7 +1012,7 @@ Ref<GDKResult> GDKSocial::_refresh_group_metadata(const Ref<GDKSocialGroup> &p_g
 
 void GDKSocial::_complete_pending_friend_ops(XblSocialManagerUserGroupHandle p_group_handle) {
     for (auto it = m_pending_friend_ops.begin(); it != m_pending_friend_ops.end();) {
-        if (!it->op.is_valid()) {
+        if (!it->request.is_valid()) {
             it = m_pending_friend_ops.erase(it);
             continue;
         }
@@ -1019,15 +1022,14 @@ void GDKSocial::_complete_pending_friend_ops(XblSocialManagerUserGroupHandle p_g
         }
 
         Ref<GDKSocialGroup> group = _find_group_by_handle(p_group_handle);
-        it->op->clear_cancel_handler();
-        it->op->complete(GDKResult::ok_result(group));
+        it->request->complete(GDKResult::ok_result(group));
         it = m_pending_friend_ops.erase(it);
     }
 }
 
 void GDKSocial::_fail_pending_friend_ops(XUserLocalId p_local_id, const Ref<GDKResult> &p_result) {
     for (auto it = m_pending_friend_ops.begin(); it != m_pending_friend_ops.end();) {
-        if (!it->op.is_valid()) {
+        if (!it->request.is_valid()) {
             it = m_pending_friend_ops.erase(it);
             continue;
         }
@@ -1036,8 +1038,7 @@ void GDKSocial::_fail_pending_friend_ops(XUserLocalId p_local_id, const Ref<GDKR
             continue;
         }
 
-        it->op->clear_cancel_handler();
-        it->op->complete(p_result);
+        it->request->complete(p_result);
         it = m_pending_friend_ops.erase(it);
     }
 }
@@ -1048,7 +1049,7 @@ void GDKSocial::_fail_pending_friend_ops_for_group(XblSocialManagerUserGroupHand
     }
 
     for (auto it = m_pending_friend_ops.begin(); it != m_pending_friend_ops.end();) {
-        if (!it->op.is_valid()) {
+        if (!it->request.is_valid()) {
             it = m_pending_friend_ops.erase(it);
             continue;
         }
@@ -1057,21 +1058,29 @@ void GDKSocial::_fail_pending_friend_ops_for_group(XblSocialManagerUserGroupHand
             continue;
         }
 
-        it->op->clear_cancel_handler();
-        it->op->complete(p_result);
+        it->request->complete(p_result);
         it = m_pending_friend_ops.erase(it);
     }
 }
 
-void GDKSocial::_cancel_pending_friend_op(GDKDispatchOp *p_op) {
-    m_pending_friend_ops.erase(
-            std::remove_if(
-                    m_pending_friend_ops.begin(),
-                    m_pending_friend_ops.end(),
-                    [p_op](const PendingFriendsOp &pending_op) {
-                        return pending_op.op.is_null() || pending_op.op.ptr() == p_op;
-                    }),
-            m_pending_friend_ops.end());
+void GDKSocial::_cancel_pending_friend_signal(GDKPendingSignal *p_request) {
+    if (p_request == nullptr) {
+        return;
+    }
+
+    for (auto it = m_pending_friend_ops.begin(); it != m_pending_friend_ops.end(); ++it) {
+        if (it->request.is_null() || it->request.ptr() != p_request) {
+            continue;
+        }
+
+        Ref<GDKPendingSignal> pending_signal = it->request;
+        m_pending_friend_ops.erase(it);
+        if (pending_signal.is_valid()) {
+            pending_signal->clear_cancel_handler();
+            pending_signal->complete(GDKResult::cancelled("Friends query cancelled."));
+        }
+        return;
+    }
 }
 
 void GDKSocial::_destroy_group_internal(const Ref<GDKSocialGroup> &p_group, bool p_remove_from_collection) {

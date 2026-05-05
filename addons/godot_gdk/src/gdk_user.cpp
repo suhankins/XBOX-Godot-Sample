@@ -8,36 +8,23 @@
 #include <godot_cpp/classes/image.hpp>
 
 #include "gdk.h"
-#include "gdk_async_op.h"
+#include "gdk_pending_signal.h"
 #include "gdk_result.h"
 #include "gdk_runtime.h"
-#include "gdk_xasync_context.h"
+#include "gdk_signal_xasync_context.h"
 
 namespace godot {
 
 namespace {
 
-Ref<GDKAsyncOp> _make_users_error_op(
-        GDK *p_owner,
+Signal _make_users_error_signal(
         GDKRuntime *p_runtime,
         HRESULT p_hresult,
         const String &p_code,
         const String &p_message,
         const Variant &p_data = Variant()) {
-    if (p_owner != nullptr) {
-        return p_owner->make_async_error_op(p_hresult, p_code, p_message, p_data);
-    }
-
-    Ref<GDKResult> result = GDKResult::error_result(p_hresult, p_code, p_message, p_data);
-    if (p_runtime != nullptr) {
-        p_runtime->set_last_error(result);
-        return p_runtime->make_completed_async_op(result);
-    }
-
-    Ref<GDKAsyncOp> op;
-    op.instantiate();
-    op->complete(result);
-    return op;
+    ERR_FAIL_NULL_V(p_runtime, Signal());
+    return p_runtime->make_error_signal(p_hresult, p_code, p_message, p_data);
 }
 
 GDKUser::SignInState _user_state_to_sign_in_state(XUserState p_user_state) {
@@ -61,6 +48,21 @@ String _sign_in_state_to_name(GDKUser::SignInState p_sign_in_state) {
         case GDKUser::SIGN_IN_STATE_SIGNED_OUT:
         default:
             return "signed_out";
+    }
+}
+
+String _user_change_event_to_name(XUserChangeEvent p_event) {
+    switch (p_event) {
+        case XUserChangeEvent::SignedInAgain:
+            return "signed_in_again";
+        case XUserChangeEvent::Gamertag:
+            return "gamertag";
+        case XUserChangeEvent::GamerPicture:
+            return "gamer_picture";
+        case XUserChangeEvent::Privileges:
+            return "privileges";
+        default:
+            return "unknown";
     }
 }
 
@@ -157,7 +159,7 @@ bool _try_parse_gamer_picture_size(const String &p_size, XUserGamerPictureSize *
     return false;
 }
 
-class AddUserAsyncContext final : public GDKXAsyncContext {
+class AddUserAsyncContext final : public GDKSignalXAsyncContext {
     GDKUsers *m_users = nullptr;
     String m_action;
 
@@ -165,10 +167,10 @@ protected:
     void finalize(XAsyncBlock *p_async_block) override {
         Ref<GDKResult> result;
 
-        if (get_runtime()->is_shutting_down() || get_op()->was_cancel_requested()) {
+        if (get_runtime()->is_shutting_down() || get_pending_signal()->was_cancel_requested()) {
             result = GDKResult::cancelled("User add operation cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -177,28 +179,28 @@ protected:
         if (result_hr == E_ABORT) {
             result = GDKResult::cancelled("User add operation cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
         if (FAILED(result_hr)) {
             result = GDKResult::hresult_error(result_hr, m_action, "user_add_result_failed");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
-        m_users->complete_add_user(user_handle, get_op());
+        m_users->complete_add_user(user_handle, get_pending_signal());
     }
 
 public:
-    AddUserAsyncContext(GDKUsers *p_users, GDKRuntime *p_runtime, const Ref<GDKAsyncOp> &p_op, const String &p_action) :
-            GDKXAsyncContext(p_runtime, p_op),
+    AddUserAsyncContext(GDKUsers *p_users, GDKRuntime *p_runtime, const Ref<GDKPendingSignal> &p_pending_signal, const String &p_action) :
+            GDKSignalXAsyncContext(p_runtime, p_pending_signal),
             m_users(p_users),
             m_action(p_action) {}
 };
 
-class ResolvePrivilegeAsyncContext final : public GDKXAsyncContext {
+class ResolvePrivilegeAsyncContext final : public GDKSignalXAsyncContext {
     GDKUsers *m_users = nullptr;
     Ref<GDKUser> m_user;
     int64_t m_privilege = 0;
@@ -207,10 +209,10 @@ protected:
     void finalize(XAsyncBlock *p_async_block) override {
         Ref<GDKResult> result;
 
-        if (get_runtime()->is_shutting_down() || get_op()->was_cancel_requested()) {
+        if (get_runtime()->is_shutting_down() || get_pending_signal()->was_cancel_requested()) {
             result = GDKResult::cancelled("Privilege resolution cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -218,7 +220,7 @@ protected:
         if (result_hr == E_ABORT) {
             result = GDKResult::cancelled("Privilege resolution cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -229,7 +231,7 @@ protected:
                     "privilege_resolve_result_failed",
                     _make_privilege_resolution_result(m_privilege));
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -241,28 +243,28 @@ protected:
                         "Resolved the privilege UI flow but failed to refresh the cached user state.",
                         "user_refresh_after_privilege_resolution_failed");
                 get_runtime()->set_last_error(result);
-                get_op()->complete(result);
+                get_pending_signal()->complete(result);
                 return;
             }
 
             if (m_users != nullptr) {
-                m_users->emit_signal("user_changed", m_user);
+                m_users->emit_signal("user_changed", m_user, "privileges");
             }
         }
 
         get_runtime()->clear_last_error();
-        get_op()->complete(GDKResult::ok_result(_make_privilege_resolution_result(m_privilege)));
+        get_pending_signal()->complete(GDKResult::ok_result(_make_privilege_resolution_result(m_privilege)));
     }
 
 public:
-    ResolvePrivilegeAsyncContext(GDKUsers *p_users, const Ref<GDKUser> &p_user, GDKRuntime *p_runtime, const Ref<GDKAsyncOp> &p_op, int64_t p_privilege) :
-            GDKXAsyncContext(p_runtime, p_op),
+    ResolvePrivilegeAsyncContext(GDKUsers *p_users, const Ref<GDKUser> &p_user, GDKRuntime *p_runtime, const Ref<GDKPendingSignal> &p_pending_signal, int64_t p_privilege) :
+            GDKSignalXAsyncContext(p_runtime, p_pending_signal),
             m_users(p_users),
             m_user(p_user),
             m_privilege(p_privilege) {}
 };
 
-class ResolveIssueAsyncContext final : public GDKXAsyncContext {
+class ResolveIssueAsyncContext final : public GDKSignalXAsyncContext {
     GDKUsers *m_users = nullptr;
     Ref<GDKUser> m_user;
     String m_url;
@@ -272,10 +274,10 @@ protected:
     void finalize(XAsyncBlock *p_async_block) override {
         Ref<GDKResult> result;
 
-        if (get_runtime()->is_shutting_down() || get_op()->was_cancel_requested()) {
+        if (get_runtime()->is_shutting_down() || get_pending_signal()->was_cancel_requested()) {
             result = GDKResult::cancelled("User issue resolution cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -283,7 +285,7 @@ protected:
         if (result_hr == E_ABORT) {
             result = GDKResult::cancelled("User issue resolution cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -294,7 +296,7 @@ protected:
                     "user_issue_resolve_result_failed",
                     _make_issue_resolution_result(m_url));
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -306,22 +308,22 @@ protected:
                         "Resolved the user issue but failed to refresh the cached user state.",
                         "user_refresh_after_issue_resolution_failed");
                 get_runtime()->set_last_error(result);
-                get_op()->complete(result);
+                get_pending_signal()->complete(result);
                 return;
             }
 
             if (m_users != nullptr) {
-                m_users->emit_signal("user_changed", m_user);
+                m_users->emit_signal("user_changed", m_user, "privileges");
             }
         }
 
         get_runtime()->clear_last_error();
-        get_op()->complete(GDKResult::ok_result(_make_issue_resolution_result(m_url)));
+        get_pending_signal()->complete(GDKResult::ok_result(_make_issue_resolution_result(m_url)));
     }
 
 public:
-    ResolveIssueAsyncContext(GDKUsers *p_users, const Ref<GDKUser> &p_user, GDKRuntime *p_runtime, const Ref<GDKAsyncOp> &p_op, const String &p_url) :
-            GDKXAsyncContext(p_runtime, p_op),
+    ResolveIssueAsyncContext(GDKUsers *p_users, const Ref<GDKUser> &p_user, GDKRuntime *p_runtime, const Ref<GDKPendingSignal> &p_pending_signal, const String &p_url) :
+            GDKSignalXAsyncContext(p_runtime, p_pending_signal),
             m_users(p_users),
             m_user(p_user),
             m_url(p_url) {
@@ -336,17 +338,17 @@ public:
     }
 };
 
-class GamerPictureAsyncContext final : public GDKXAsyncContext {
+class GamerPictureAsyncContext final : public GDKSignalXAsyncContext {
     Ref<GDKUser> m_user;
 
 protected:
     void finalize(XAsyncBlock *p_async_block) override {
         Ref<GDKResult> result;
 
-        if (get_runtime()->is_shutting_down() || get_op()->was_cancel_requested()) {
+        if (get_runtime()->is_shutting_down() || get_pending_signal()->was_cancel_requested()) {
             result = GDKResult::cancelled("Gamer picture request cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -355,7 +357,7 @@ protected:
         if (size_hr == E_ABORT) {
             result = GDKResult::cancelled("Gamer picture request cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -365,7 +367,7 @@ protected:
                     "Failed to get the gamer picture buffer size.",
                     "gamer_picture_result_size_failed");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -379,7 +381,7 @@ protected:
         if (result_hr == E_ABORT) {
             result = GDKResult::cancelled("Gamer picture request cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -389,7 +391,7 @@ protected:
                     "Failed to retrieve the gamer picture bytes.",
                     "gamer_picture_result_failed");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -397,7 +399,7 @@ protected:
         if (png_bytes.resize(static_cast<int64_t>(buffer_used)) != 0) {
             result = GDKResult::error_result(E_OUTOFMEMORY, "gamer_picture_buffer_alloc_failed", "Failed to allocate a buffer for the gamer picture.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
         if (buffer_used > 0) {
@@ -409,21 +411,21 @@ protected:
         if (image->load_png_from_buffer(png_bytes) != 0) {
             result = GDKResult::error_result(E_FAIL, "gamer_picture_decode_failed", "Failed to decode the gamer picture PNG into a Godot Image.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
         get_runtime()->clear_last_error();
-        get_op()->complete(GDKResult::ok_result(image));
+        get_pending_signal()->complete(GDKResult::ok_result(image));
     }
 
 public:
-    GamerPictureAsyncContext(const Ref<GDKUser> &p_user, GDKRuntime *p_runtime, const Ref<GDKAsyncOp> &p_op) :
-            GDKXAsyncContext(p_runtime, p_op),
+    GamerPictureAsyncContext(const Ref<GDKUser> &p_user, GDKRuntime *p_runtime, const Ref<GDKPendingSignal> &p_pending_signal) :
+            GDKSignalXAsyncContext(p_runtime, p_pending_signal),
             m_user(p_user) {}
 };
 
-class TokenAndSignatureAsyncContext final : public GDKXAsyncContext {
+class TokenAndSignatureAsyncContext final : public GDKSignalXAsyncContext {
     Ref<GDKUser> m_user;
     PackedByteArray m_body;
     bool m_force_refresh = false;
@@ -437,10 +439,10 @@ protected:
     void finalize(XAsyncBlock *p_async_block) override {
         Ref<GDKResult> result;
 
-        if (get_runtime()->is_shutting_down() || get_op()->was_cancel_requested()) {
+        if (get_runtime()->is_shutting_down() || get_pending_signal()->was_cancel_requested()) {
             result = GDKResult::cancelled("Token and signature request cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -449,7 +451,7 @@ protected:
         if (size_hr == E_ABORT) {
             result = GDKResult::cancelled("Token and signature request cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -459,7 +461,7 @@ protected:
                     "Failed to get the token/signature result size.",
                     "token_signature_result_size_failed");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -474,7 +476,7 @@ protected:
         if (result_hr == E_ABORT) {
             result = GDKResult::cancelled("Token and signature request cancelled.");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -484,7 +486,7 @@ protected:
                     "Failed to retrieve the token/signature payload.",
                     "token_signature_result_failed");
             get_runtime()->set_last_error(result);
-            get_op()->complete(result);
+            get_pending_signal()->complete(result);
             return;
         }
 
@@ -493,20 +495,20 @@ protected:
         data["signature"] = token_data != nullptr && token_data->signature != nullptr ? String::utf8(token_data->signature) : String();
 
         get_runtime()->clear_last_error();
-        get_op()->complete(GDKResult::ok_result(data));
+        get_pending_signal()->complete(GDKResult::ok_result(data));
     }
 
 public:
     TokenAndSignatureAsyncContext(
             const Ref<GDKUser> &p_user,
             GDKRuntime *p_runtime,
-            const Ref<GDKAsyncOp> &p_op,
+            const Ref<GDKPendingSignal> &p_pending_signal,
             const String &p_method,
             const String &p_url,
             const Dictionary &p_headers,
             const PackedByteArray &p_body,
             bool p_force_refresh) :
-            GDKXAsyncContext(p_runtime, p_op),
+            GDKSignalXAsyncContext(p_runtime, p_pending_signal),
             m_user(p_user),
             m_body(p_body),
             m_force_refresh(p_force_refresh) {
@@ -756,7 +758,7 @@ void GDKUser::clear() {
 }
 
 void GDKUsers::_bind_methods() {
-    ClassDB::bind_method(D_METHOD("add_default_user_async", "allow_guests"), &GDKUsers::add_default_user_async, DEFVAL(false));
+    ClassDB::bind_method(D_METHOD("add_default_user_async"), &GDKUsers::add_default_user_async);
     ClassDB::bind_method(D_METHOD("add_user_with_ui_async"), &GDKUsers::add_user_with_ui_async);
     ClassDB::bind_method(D_METHOD("get_primary_user"), &GDKUsers::get_primary_user);
     ClassDB::bind_method(D_METHOD("get_users"), &GDKUsers::get_users);
@@ -771,10 +773,13 @@ void GDKUsers::_bind_methods() {
             DEFVAL(PackedByteArray()),
             DEFVAL(false));
 
-    ADD_SIGNAL(MethodInfo("user_added", PropertyInfo(Variant::OBJECT, "user")));
+    ADD_SIGNAL(MethodInfo("user_added", PropertyInfo(Variant::OBJECT, "user", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT, "GDKUser")));
     ADD_SIGNAL(MethodInfo("user_removed", PropertyInfo(Variant::INT, "local_id")));
-    ADD_SIGNAL(MethodInfo("user_changed", PropertyInfo(Variant::OBJECT, "user")));
-    ADD_SIGNAL(MethodInfo("primary_user_changed", PropertyInfo(Variant::OBJECT, "user")));
+    ADD_SIGNAL(MethodInfo(
+            "user_changed",
+            PropertyInfo(Variant::OBJECT, "user", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT, "GDKUser"),
+            PropertyInfo(Variant::STRING, "change_kind")));
+    ADD_SIGNAL(MethodInfo("primary_user_changed", PropertyInfo(Variant::OBJECT, "user", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT, "GDKUser")));
 }
 
 void GDKUsers::set_owner(GDK *p_owner) {
@@ -818,17 +823,14 @@ void GDKUsers::shutdown() {
     m_users.clear();
 }
 
-Ref<GDKAsyncOp> GDKUsers::add_default_user_async(bool p_allow_guests) {
-    XUserAddOptions options = XUserAddOptions::AddDefaultUserSilently;
-    if (p_allow_guests) {
-        options = options | XUserAddOptions::AllowGuests;
-    }
-
-    return _start_add_user_async(options, "Failed to add the default user.");
+Signal GDKUsers::add_default_user_async() {
+    return _start_add_user_async(XUserAddOptions::AddDefaultUserSilently, "Failed to add the default user.");
 }
 
-Ref<GDKAsyncOp> GDKUsers::add_user_with_ui_async() {
-    return _start_add_user_async(XUserAddOptions::AddDefaultUserAllowingUI, "Failed to add a user with UI.");
+Signal GDKUsers::add_user_with_ui_async() {
+    return _start_add_user_async(
+            XUserAddOptions::AddDefaultUserAllowingUI | XUserAddOptions::AllowGuests,
+            "Failed to add a user with UI.");
 }
 
 Ref<GDKUser> GDKUsers::get_primary_user() const {
@@ -843,13 +845,13 @@ Array GDKUsers::get_users() const {
     return users;
 }
 
-Ref<GDKAsyncOp> GDKUsers::check_privilege_async(const Ref<GDKUser> &p_user, int64_t p_privilege) {
+Signal GDKUsers::check_privilege_async(const Ref<GDKUser> &p_user, int64_t p_privilege) {
     GDKRuntime *runtime = _get_runtime();
     if (runtime == nullptr || !runtime->is_initialized()) {
-        return _make_users_error_op(m_owner, runtime, E_FAIL, "not_initialized", "GDK is not initialized. Call GDK.initialize() first.");
+        return _make_users_error_signal(runtime, E_FAIL, "not_initialized", "GDK is not initialized. Call GDK.initialize() first.");
     }
     if (!p_user.is_valid() || p_user->get_handle() == nullptr) {
-        return _make_users_error_op(m_owner, runtime, E_INVALIDARG, "invalid_user", "A signed-in GDKUser is required.");
+        return _make_users_error_signal(runtime, E_INVALIDARG, "invalid_user", "A signed-in GDKUser is required.");
     }
 
     bool has_privilege = false;
@@ -863,8 +865,7 @@ Ref<GDKAsyncOp> GDKUsers::check_privilege_async(const Ref<GDKUser> &p_user, int6
     if (hr == E_GAMEUSER_RESOLVE_USER_ISSUE_REQUIRED) {
         Dictionary data = _make_privilege_result(p_privilege, false, deny_reason);
         data["needs_user_issue_resolution"] = true;
-        return _make_users_error_op(
-                m_owner,
+        return _make_users_error_signal(
                 runtime,
                 hr,
                 "user_issue_resolution_required",
@@ -872,8 +873,7 @@ Ref<GDKAsyncOp> GDKUsers::check_privilege_async(const Ref<GDKUser> &p_user, int6
                 data);
     }
     if (FAILED(hr)) {
-        return _make_users_error_op(
-                m_owner,
+        return _make_users_error_signal(
                 runtime,
                 hr,
                 "privilege_check_failed",
@@ -883,24 +883,24 @@ Ref<GDKAsyncOp> GDKUsers::check_privilege_async(const Ref<GDKUser> &p_user, int6
 
     Dictionary data = _make_privilege_result(p_privilege, has_privilege, deny_reason);
     data["needs_user_issue_resolution"] = false;
+    Ref<GDKPendingSignal> pending_signal = runtime->make_pending_signal();
     runtime->clear_last_error();
-    return runtime->make_completed_async_op(GDKResult::ok_result(data));
+    pending_signal->complete_deferred(GDKResult::ok_result(data));
+    return pending_signal->get_completed_signal();
 }
 
-Ref<GDKAsyncOp> GDKUsers::resolve_privilege_with_ui_async(const Ref<GDKUser> &p_user, int64_t p_privilege) {
+Signal GDKUsers::resolve_privilege_with_ui_async(const Ref<GDKUser> &p_user, int64_t p_privilege) {
     GDKRuntime *runtime = _get_runtime();
     if (runtime == nullptr || !runtime->is_initialized()) {
-        return _make_users_error_op(m_owner, runtime, E_FAIL, "not_initialized", "GDK is not initialized. Call GDK.initialize() first.");
+        return _make_users_error_signal(runtime, E_FAIL, "not_initialized", "GDK is not initialized. Call GDK.initialize() first.");
     }
     if (!p_user.is_valid() || p_user->get_handle() == nullptr) {
-        return _make_users_error_op(m_owner, runtime, E_INVALIDARG, "invalid_user", "A signed-in GDKUser is required.");
+        return _make_users_error_signal(runtime, E_INVALIDARG, "invalid_user", "A signed-in GDKUser is required.");
     }
 
-    Ref<GDKAsyncOp> op;
-    op.instantiate();
-    runtime->retain_op(op);
+    Ref<GDKPendingSignal> pending_signal = runtime->make_pending_signal();
 
-    auto *context = new ResolvePrivilegeAsyncContext(this, p_user, runtime, op, p_privilege);
+    auto *context = new ResolvePrivilegeAsyncContext(this, p_user, runtime, pending_signal, p_privilege);
     context->bind_cancel_handler();
 
     HRESULT hr = XUserResolvePrivilegeWithUiAsync(
@@ -909,7 +909,7 @@ Ref<GDKAsyncOp> GDKUsers::resolve_privilege_with_ui_async(const Ref<GDKUser> &p_
             static_cast<XUserPrivilege>(static_cast<uint32_t>(p_privilege)),
             context->get_async_block());
     if (FAILED(hr)) {
-        op->clear_cancel_handler();
+        pending_signal->clear_cancel_handler();
         delete context;
 
         Ref<GDKResult> result = GDKResult::hresult_error(
@@ -918,27 +918,24 @@ Ref<GDKAsyncOp> GDKUsers::resolve_privilege_with_ui_async(const Ref<GDKUser> &p_
                 "privilege_resolve_start_failed",
                 _make_privilege_resolution_result(p_privilege));
         runtime->set_last_error(result);
-        op->complete(result);
-        return op;
+        pending_signal->complete_deferred(result);
     }
 
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
-Ref<GDKAsyncOp> GDKUsers::resolve_issue_with_ui_async(const Ref<GDKUser> &p_user, const String &p_url) {
+Signal GDKUsers::resolve_issue_with_ui_async(const Ref<GDKUser> &p_user, const String &p_url) {
     GDKRuntime *runtime = _get_runtime();
     if (runtime == nullptr || !runtime->is_initialized()) {
-        return _make_users_error_op(m_owner, runtime, E_FAIL, "not_initialized", "GDK is not initialized. Call GDK.initialize() first.");
+        return _make_users_error_signal(runtime, E_FAIL, "not_initialized", "GDK is not initialized. Call GDK.initialize() first.");
     }
     if (!p_user.is_valid() || p_user->get_handle() == nullptr) {
-        return _make_users_error_op(m_owner, runtime, E_INVALIDARG, "invalid_user", "A signed-in GDKUser is required.");
+        return _make_users_error_signal(runtime, E_INVALIDARG, "invalid_user", "A signed-in GDKUser is required.");
     }
 
-    Ref<GDKAsyncOp> op;
-    op.instantiate();
-    runtime->retain_op(op);
+    Ref<GDKPendingSignal> pending_signal = runtime->make_pending_signal();
 
-    auto *context = new ResolveIssueAsyncContext(this, p_user, runtime, op, p_url.strip_edges());
+    auto *context = new ResolveIssueAsyncContext(this, p_user, runtime, pending_signal, p_url.strip_edges());
     context->bind_cancel_handler();
 
     HRESULT hr = XUserResolveIssueWithUiAsync(
@@ -946,7 +943,7 @@ Ref<GDKAsyncOp> GDKUsers::resolve_issue_with_ui_async(const Ref<GDKUser> &p_user
             context->get_url(),
             context->get_async_block());
     if (FAILED(hr)) {
-        op->clear_cancel_handler();
+        pending_signal->clear_cancel_handler();
         delete context;
 
         Ref<GDKResult> result = GDKResult::hresult_error(
@@ -955,37 +952,33 @@ Ref<GDKAsyncOp> GDKUsers::resolve_issue_with_ui_async(const Ref<GDKUser> &p_user
                 "user_issue_resolve_start_failed",
                 _make_issue_resolution_result(p_url.strip_edges()));
         runtime->set_last_error(result);
-        op->complete(result);
-        return op;
+        pending_signal->complete_deferred(result);
     }
 
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
-Ref<GDKAsyncOp> GDKUsers::get_gamer_picture_async(const Ref<GDKUser> &p_user, const String &p_size) {
+Signal GDKUsers::get_gamer_picture_async(const Ref<GDKUser> &p_user, const String &p_size) {
     GDKRuntime *runtime = _get_runtime();
     if (runtime == nullptr || !runtime->is_initialized()) {
-        return _make_users_error_op(m_owner, runtime, E_FAIL, "not_initialized", "GDK is not initialized. Call GDK.initialize() first.");
+        return _make_users_error_signal(runtime, E_FAIL, "not_initialized", "GDK is not initialized. Call GDK.initialize() first.");
     }
     if (!p_user.is_valid() || p_user->get_handle() == nullptr) {
-        return _make_users_error_op(m_owner, runtime, E_INVALIDARG, "invalid_user", "A signed-in GDKUser is required.");
+        return _make_users_error_signal(runtime, E_INVALIDARG, "invalid_user", "A signed-in GDKUser is required.");
     }
 
     XUserGamerPictureSize native_size = XUserGamerPictureSize::Medium;
     if (!_try_parse_gamer_picture_size(p_size, &native_size)) {
-        return _make_users_error_op(
-                m_owner,
+        return _make_users_error_signal(
                 runtime,
                 E_INVALIDARG,
                 "invalid_gamer_picture_size",
                 "Gamer picture size must be one of: small, medium, large, extra_large.");
     }
 
-    Ref<GDKAsyncOp> op;
-    op.instantiate();
-    runtime->retain_op(op);
+    Ref<GDKPendingSignal> pending_signal = runtime->make_pending_signal();
 
-    auto *context = new GamerPictureAsyncContext(p_user, runtime, op);
+    auto *context = new GamerPictureAsyncContext(p_user, runtime, pending_signal);
     context->bind_cancel_handler();
 
     HRESULT hr = XUserGetGamerPictureAsync(
@@ -993,7 +986,7 @@ Ref<GDKAsyncOp> GDKUsers::get_gamer_picture_async(const Ref<GDKUser> &p_user, co
             native_size,
             context->get_async_block());
     if (FAILED(hr)) {
-        op->clear_cancel_handler();
+        pending_signal->clear_cancel_handler();
         delete context;
 
         Ref<GDKResult> result = GDKResult::hresult_error(
@@ -1001,50 +994,47 @@ Ref<GDKAsyncOp> GDKUsers::get_gamer_picture_async(const Ref<GDKUser> &p_user, co
                 "Failed to start the gamer picture request.",
                 "gamer_picture_start_failed");
         runtime->set_last_error(result);
-        op->complete(result);
-        return op;
+        pending_signal->complete_deferred(result);
     }
 
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
-Ref<GDKAsyncOp> GDKUsers::get_token_and_signature_async(
+Signal GDKUsers::get_token_and_signature_async(
         const Ref<GDKUser> &p_user,
         const String &p_method,
         const String &p_url,
         const Dictionary &p_headers,
         const PackedByteArray &p_body,
-        bool p_force_refresh) {
+    bool p_force_refresh) {
     GDKRuntime *runtime = _get_runtime();
     if (runtime == nullptr || !runtime->is_initialized()) {
-        return _make_users_error_op(m_owner, runtime, E_FAIL, "not_initialized", "GDK is not initialized. Call GDK.initialize() first.");
+        return _make_users_error_signal(runtime, E_FAIL, "not_initialized", "GDK is not initialized. Call GDK.initialize() first.");
     }
     if (!p_user.is_valid() || p_user->get_handle() == nullptr) {
-        return _make_users_error_op(m_owner, runtime, E_INVALIDARG, "invalid_user", "A signed-in GDKUser is required.");
+        return _make_users_error_signal(runtime, E_INVALIDARG, "invalid_user", "A signed-in GDKUser is required.");
     }
 
     const String method = p_method.strip_edges();
     const String url = p_url.strip_edges();
     if (method.is_empty()) {
-        return _make_users_error_op(m_owner, runtime, E_INVALIDARG, "invalid_http_method", "Token/signature requests require a non-empty HTTP method.");
+        return _make_users_error_signal(runtime, E_INVALIDARG, "invalid_http_method", "Token/signature requests require a non-empty HTTP method.");
     }
     if (url.is_empty()) {
-        return _make_users_error_op(m_owner, runtime, E_INVALIDARG, "invalid_request_url", "Token/signature requests require a non-empty URL.");
+        return _make_users_error_signal(runtime, E_INVALIDARG, "invalid_request_url", "Token/signature requests require a non-empty URL.");
     }
 
     const Array header_keys = p_headers.keys();
     for (int64_t i = 0; i < header_keys.size(); ++i) {
         const String header_name = String(header_keys[i]).strip_edges();
         if (header_name.is_empty()) {
-            return _make_users_error_op(m_owner, runtime, E_INVALIDARG, "invalid_request_headers", "Token/signature request headers require non-empty string keys.");
+            return _make_users_error_signal(runtime, E_INVALIDARG, "invalid_request_headers", "Token/signature request headers require non-empty string keys.");
         }
     }
 
-    Ref<GDKAsyncOp> op;
-    op.instantiate();
-    runtime->retain_op(op);
+    Ref<GDKPendingSignal> pending_signal = runtime->make_pending_signal();
 
-    auto *context = new TokenAndSignatureAsyncContext(p_user, runtime, op, method, url, p_headers, p_body, p_force_refresh);
+    auto *context = new TokenAndSignatureAsyncContext(p_user, runtime, pending_signal, method, url, p_headers, p_body, p_force_refresh);
     context->bind_cancel_handler();
 
     HRESULT hr = XUserGetTokenAndSignatureAsync(
@@ -1058,7 +1048,7 @@ Ref<GDKAsyncOp> GDKUsers::get_token_and_signature_async(
             context->get_body_data(),
             context->get_async_block());
     if (FAILED(hr)) {
-        op->clear_cancel_handler();
+        pending_signal->clear_cancel_handler();
         delete context;
 
         Ref<GDKResult> result = GDKResult::hresult_error(
@@ -1066,11 +1056,10 @@ Ref<GDKAsyncOp> GDKUsers::get_token_and_signature_async(
                 "Failed to start the token/signature request.",
                 "token_signature_start_failed");
         runtime->set_last_error(result);
-        op->complete(result);
-        return op;
+        pending_signal->complete_deferred(result);
     }
 
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
 void GDKUsers::on_user_change(XUserLocalId p_user_local_id, XUserChangeEvent p_event) {
@@ -1095,7 +1084,7 @@ void GDKUsers::on_user_change(XUserLocalId p_user_local_id, XUserChangeEvent p_e
 
             _remove_user_by_local_id(p_user_local_id);
             if (was_primary) {
-                m_primary_user = m_users.empty() ? Ref<GDKUser>() : m_users.front();
+                m_primary_user.unref();
                 emit_signal("primary_user_changed", m_primary_user);
             }
 
@@ -1106,7 +1095,7 @@ void GDKUsers::on_user_change(XUserLocalId p_user_local_id, XUserChangeEvent p_e
         case XUserChangeEvent::GamerPicture:
         case XUserChangeEvent::Privileges: {
             if (SUCCEEDED(user->refresh())) {
-                emit_signal("user_changed", user);
+                emit_signal("user_changed", user, _user_change_event_to_name(p_event));
             }
         } break;
         case XUserChangeEvent::SigningOut:
@@ -1115,7 +1104,7 @@ void GDKUsers::on_user_change(XUserLocalId p_user_local_id, XUserChangeEvent p_e
     }
 }
 
-void GDKUsers::complete_add_user(XUserHandle p_user_handle, const Ref<GDKAsyncOp> &p_op) {
+void GDKUsers::complete_add_user(XUserHandle p_user_handle, const Ref<GDKPendingSignal> &p_pending_signal) {
     Ref<GDKUser> user;
     user.instantiate();
 
@@ -1127,26 +1116,28 @@ void GDKUsers::complete_add_user(XUserHandle p_user_handle, const Ref<GDKAsyncOp
 
         Ref<GDKResult> result = GDKResult::hresult_error(hr, "Failed to translate the native XUser into a Godot wrapper.", "user_wrapper_create_failed");
         _get_runtime()->set_last_error(result);
-        p_op->complete(result);
+        p_pending_signal->complete(result);
         return;
     }
 
-    const bool is_new_user = _upsert_user(user);
-    const bool primary_changed = !m_primary_user.is_valid() || m_primary_user->get_local_id() != user->get_local_id();
-    m_primary_user = user;
+    const bool is_new_user = _add_or_update_user(user);
+    const bool establish_primary_user = !m_primary_user.is_valid();
+    if (establish_primary_user) {
+        m_primary_user = user;
+    }
 
     if (is_new_user) {
         emit_signal("user_added", user);
     } else {
-        emit_signal("user_changed", user);
+        emit_signal("user_changed", user, "signed_in_again");
     }
 
-    if (primary_changed) {
+    if (establish_primary_user) {
         emit_signal("primary_user_changed", user);
     }
 
     _get_runtime()->clear_last_error();
-    p_op->complete(GDKResult::ok_result(user));
+    p_pending_signal->complete(GDKResult::ok_result(user));
 }
 
 void CALLBACK GDKUsers::_user_change_callback(void *p_context, XUserLocalId p_user_local_id, XUserChangeEvent p_event) {
@@ -1158,34 +1149,31 @@ GDKRuntime *GDKUsers::_get_runtime() const {
     return m_owner != nullptr ? m_owner->get_runtime() : nullptr;
 }
 
-Ref<GDKAsyncOp> GDKUsers::_start_add_user_async(XUserAddOptions p_options, const String &p_action) {
+Signal GDKUsers::_start_add_user_async(XUserAddOptions p_options, const String &p_action) {
     GDKRuntime *runtime = _get_runtime();
     if (runtime == nullptr || !runtime->is_initialized()) {
-        return _make_users_error_op(m_owner, runtime, E_FAIL, "not_initialized", "GDK is not initialized. Call GDK.initialize() first.");
+        return _make_users_error_signal(runtime, E_FAIL, "not_initialized", "GDK is not initialized. Call GDK.initialize() first.");
     }
 
-    Ref<GDKAsyncOp> op;
-    op.instantiate();
-    runtime->retain_op(op);
+    Ref<GDKPendingSignal> pending_signal = runtime->make_pending_signal();
 
-    auto *context = new AddUserAsyncContext(this, runtime, op, p_action);
+    auto *context = new AddUserAsyncContext(this, runtime, pending_signal, p_action);
     context->bind_cancel_handler();
 
     HRESULT hr = XUserAddAsync(p_options, context->get_async_block());
     if (FAILED(hr)) {
-        op->clear_cancel_handler();
+        pending_signal->clear_cancel_handler();
         delete context;
 
         Ref<GDKResult> result = GDKResult::hresult_error(hr, p_action, "user_add_start_failed");
         runtime->set_last_error(result);
-        op->complete(result);
-        return op;
+        pending_signal->complete_deferred(result);
     }
 
-    return op;
+    return pending_signal->get_completed_signal();
 }
 
-bool GDKUsers::_upsert_user(const Ref<GDKUser> &p_user) {
+bool GDKUsers::_add_or_update_user(const Ref<GDKUser> &p_user) {
     for (Ref<GDKUser> &existing : m_users) {
         if (existing.is_valid() && existing->get_local_id() == p_user->get_local_id()) {
             existing = p_user;

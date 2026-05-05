@@ -44,6 +44,17 @@ To enable the repo-managed pre-commit hook that runs headless GDScript validatio
 git config core.hooksPath .githooks
 ```
 
+To preview or remove ignored local artifacts from your worktree (build output,
+sample `.godot\`, local Godot executables/configs, generated packaging files),
+run:
+
+```powershell
+.\tools\clean_repo.ps1
+.\tools\clean_repo.ps1 -Apply
+```
+
+The script removes ignored files only, so tracked repository files stay intact.
+
 ### Requirements
 
 - Windows 10 (18362+) or Windows 11
@@ -76,7 +87,7 @@ tools/                    # CLI helper scripts
 - `sample\gdk_demo\` — baseline runtime/users/achievements demo
 - `sample\gdk_launch_point\` — scenario-driven launch point built around grouped runtime/users/achievements/multiplayer-activity actions and an event log
 - `sample\multiplayer_pong\` — multiplayer pong with Xbox identity and single player mode
-- `sample\playfab_demo\` — PlayFab root singleton smoke test with manual sign-in
+- `sample\playfab_demo\` — PlayFab root singleton smoke test with manual sign-in plus a headless contract suite
 
 ## Documentation
 
@@ -143,6 +154,10 @@ wraps Microsoft GDK PC packaging tools into the Godot Editor.
 2. In the Godot Editor, go to **Project → Project Settings → Plugins** and enable **GDK Packaging**
 3. The GDK tools are discovered automatically from `C:\Program Files (x86)\Microsoft GDK\bin\`
    (override with the `GDK_BIN` environment variable if needed)
+
+> In this repo, `cmake --build build --preset debug` also refreshes the synced
+> sample mirrors under `sample\...\addons\godot_gdk_packaging\`. Edit
+> `addons\godot_gdk_packaging\` as the source of truth.
 
 ### Usage
 

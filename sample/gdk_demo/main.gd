@@ -21,13 +21,13 @@ const DEMO_MPA_CURRENT_PLAYERS := 1
 @onready var achievement_label: Label = $VBoxContainer/AchievementLabel
 @onready var mpa_label: RichTextLabel = $VBoxContainer/MpaLabel
 
-var _silent_sign_in_op = null
-var _gamer_picture_op = null
-var _achievement_query_op = null
-var _achievement_update_op = null
-var _mpa_set_op = null
-var _mpa_delete_op = null
-var _mpa_invite_ui_op = null
+var _silent_sign_in_in_progress := false
+var _gamer_picture_request_id := 0
+var _achievement_query_in_progress := false
+var _achievement_update_in_progress := false
+var _mpa_set_in_progress := false
+var _mpa_delete_in_progress := false
+var _mpa_invite_ui_in_progress := false
 var _loaded_gamer_picture_xuid := ""
 var _pending_gamer_picture_xuid := ""
 var _last_mpa_event_text := "No invite events yet."
@@ -122,6 +122,7 @@ func _clear_user() -> void:
 func _clear_avatar() -> void:
 	avatar_rect.texture = null
 	avatar_rect.visible = false
+	_gamer_picture_request_id += 1
 	_loaded_gamer_picture_xuid = ""
 	_pending_gamer_picture_xuid = ""
 
@@ -134,12 +135,13 @@ func _load_gamer_picture(user) -> void:
 		avatar_rect.visible = true
 		return
 
-	if _gamer_picture_op != null and not _gamer_picture_op.is_done():
-		if _pending_gamer_picture_xuid == user.xuid:
-			return
-		_gamer_picture_op.cancel()
+	if _pending_gamer_picture_xuid == user.xuid:
+		return
 
+	_gamer_picture_request_id += 1
+	var request_id: int = _gamer_picture_request_id
 	_pending_gamer_picture_xuid = user.xuid
+	_loaded_gamer_picture_xuid = ""
 	avatar_rect.texture = null
 	avatar_rect.visible = false
 
@@ -149,15 +151,11 @@ func _load_gamer_picture(user) -> void:
 		_clear_avatar()
 		return
 
-	var gamer_picture_op = gdk.users.get_gamer_picture_async(user)
-	_gamer_picture_op = gamer_picture_op
-	if gamer_picture_op.is_done():
-		_on_gamer_picture_completed(gamer_picture_op.get_result(), gamer_picture_op, requested_xuid)
-	else:
-		gamer_picture_op.completed.connect(_on_gamer_picture_completed.bind(gamer_picture_op, requested_xuid))
+	var gamer_picture_signal: Signal = gdk.users.get_gamer_picture_async(user)
+	gamer_picture_signal.connect(_on_gamer_picture_completed.bind(request_id, requested_xuid), CONNECT_ONE_SHOT)
 
-func _on_gamer_picture_completed(result, gamer_picture_op, requested_xuid: String) -> void:
-	if gamer_picture_op != _gamer_picture_op:
+func _on_gamer_picture_completed(result, request_id: int, requested_xuid: String) -> void:
+	if request_id != _gamer_picture_request_id:
 		return
 
 	_pending_gamer_picture_xuid = ""
@@ -178,7 +176,7 @@ func _on_gamer_picture_completed(result, gamer_picture_op, requested_xuid: Strin
 	_loaded_gamer_picture_xuid = primary_user.xuid
 
 func _on_sign_in_pressed() -> void:
-	if _silent_sign_in_op and not _silent_sign_in_op.is_done():
+	if _silent_sign_in_in_progress:
 		return
 
 	var gdk = _get_gdk()
@@ -190,20 +188,13 @@ func _on_sign_in_pressed() -> void:
 	sign_in_button.disabled = true
 	sign_in_button.text = "Silent sign-in..."
 
-	_silent_sign_in_op = gdk.users.add_default_user_async()
-	if _silent_sign_in_op == null:
-		status_label.text = "GDK: Silent sign-in could not start"
-		sign_in_button.text = "Retry Silent Sign-In"
-		sign_in_button.disabled = false
-		_refresh_achievement_ui()
-		return
-
-	if _silent_sign_in_op.is_done():
-		_on_sign_in_completed(_silent_sign_in_op.get_result())
-	else:
-		_silent_sign_in_op.completed.connect(_on_sign_in_completed)
+	_silent_sign_in_in_progress = true
+	var sign_in_signal: Signal = gdk.users.add_default_user_async()
+	sign_in_signal.connect(_on_sign_in_completed, CONNECT_ONE_SHOT)
 
 func _on_sign_in_completed(result) -> void:
+	_silent_sign_in_in_progress = false
+
 	if result == null:
 		status_label.text = "GDK: Silent sign-in could not start"
 		sign_in_button.text = "Retry Silent Sign-In"
@@ -230,6 +221,7 @@ func _on_runtime_initialized() -> void:
 	_refresh_mpa_ui()
 
 func _on_runtime_shutdown() -> void:
+	_silent_sign_in_in_progress = false
 	status_label.text = "GDK: Shut down"
 	_clear_user()
 	sign_in_button.disabled = true
@@ -247,8 +239,9 @@ func _on_user_added(user) -> void:
 	if _is_primary_user(user):
 		_show_user(user)
 
-func _on_user_changed(user) -> void:
+func _on_user_changed(user, change_kind: String) -> void:
 	if _is_primary_user(user):
+		status_label.text = "GDK: Primary user updated (%s)" % change_kind
 		_show_user(user)
 
 func _on_user_removed(local_id: int) -> void:
@@ -281,8 +274,8 @@ func _find_cached_achievement(user, achievement_id: String):
 
 func _refresh_achievement_ui() -> void:
 	var gdk = _get_gdk()
-	var query_in_progress: bool = _achievement_query_op != null and not _achievement_query_op.is_done()
-	var update_in_progress: bool = _achievement_update_op != null and not _achievement_update_op.is_done()
+	var query_in_progress: bool = _achievement_query_in_progress
+	var update_in_progress: bool = _achievement_update_in_progress
 
 	if gdk == null:
 		achievement_button.text = "Update Achievement %s" % DEMO_ACHIEVEMENT_ID
@@ -360,9 +353,9 @@ func _format_invite_event(invite) -> String:
 
 func _refresh_mpa_ui() -> void:
 	var gdk = _get_gdk()
-	var set_in_progress = _mpa_set_op != null and not _mpa_set_op.is_done()
-	var delete_in_progress = _mpa_delete_op != null and not _mpa_delete_op.is_done()
-	var invite_ui_in_progress = _mpa_invite_ui_op != null and not _mpa_invite_ui_op.is_done()
+	var set_in_progress = _mpa_set_in_progress
+	var delete_in_progress = _mpa_delete_in_progress
+	var invite_ui_in_progress = _mpa_invite_ui_in_progress
 
 	if gdk == null:
 		mpa_set_button.disabled = true
@@ -404,7 +397,7 @@ func _refresh_mpa_ui() -> void:
 	mpa_label.text = "MPA: %s\nInvite events: %s" % [_format_mpa_activity(activity), _last_mpa_event_text]
 
 func _on_mpa_set_pressed() -> void:
-	if _mpa_set_op != null and not _mpa_set_op.is_done():
+	if _mpa_set_in_progress:
 		return
 
 	var gdk = _get_gdk()
@@ -415,7 +408,7 @@ func _on_mpa_set_pressed() -> void:
 	if user == null:
 		return
 
-	_mpa_set_op = gdk.multiplayer_activity.set_activity_async(
+	var completion_signal = gdk.multiplayer_activity.set_activity_async(
 		user,
 		DEMO_MPA_CONNECTION_STRING,
 		"followed",
@@ -424,13 +417,12 @@ func _on_mpa_set_pressed() -> void:
 		DEMO_MPA_GROUP_ID,
 		false
 	)
-	if _mpa_set_op.is_done():
-		_on_mpa_set_completed(_mpa_set_op.get_result())
-	else:
-		_mpa_set_op.completed.connect(_on_mpa_set_completed)
+	_mpa_set_in_progress = true
+	completion_signal.connect(_on_mpa_set_completed, CONNECT_ONE_SHOT)
 	_refresh_mpa_ui()
 
 func _on_mpa_set_completed(result) -> void:
+	_mpa_set_in_progress = false
 	if result != null and result.ok:
 		status_label.text = "GDK: Multiplayer activity ready ✓"
 	else:
@@ -438,7 +430,7 @@ func _on_mpa_set_completed(result) -> void:
 	_refresh_mpa_ui()
 
 func _on_mpa_clear_pressed() -> void:
-	if _mpa_delete_op != null and not _mpa_delete_op.is_done():
+	if _mpa_delete_in_progress:
 		return
 
 	var gdk = _get_gdk()
@@ -449,14 +441,13 @@ func _on_mpa_clear_pressed() -> void:
 	if user == null:
 		return
 
-	_mpa_delete_op = gdk.multiplayer_activity.delete_activity_async(user)
-	if _mpa_delete_op.is_done():
-		_on_mpa_delete_completed(_mpa_delete_op.get_result())
-	else:
-		_mpa_delete_op.completed.connect(_on_mpa_delete_completed)
+	var completion_signal = gdk.multiplayer_activity.delete_activity_async(user)
+	_mpa_delete_in_progress = true
+	completion_signal.connect(_on_mpa_delete_completed, CONNECT_ONE_SHOT)
 	_refresh_mpa_ui()
 
 func _on_mpa_delete_completed(result) -> void:
+	_mpa_delete_in_progress = false
 	if result != null and result.ok:
 		status_label.text = "GDK: Multiplayer activity cleared"
 	else:
@@ -464,7 +455,7 @@ func _on_mpa_delete_completed(result) -> void:
 	_refresh_mpa_ui()
 
 func _on_mpa_invite_ui_pressed() -> void:
-	if _mpa_invite_ui_op != null and not _mpa_invite_ui_op.is_done():
+	if _mpa_invite_ui_in_progress:
 		return
 
 	var gdk = _get_gdk()
@@ -475,14 +466,13 @@ func _on_mpa_invite_ui_pressed() -> void:
 	if user == null:
 		return
 
-	_mpa_invite_ui_op = gdk.multiplayer_activity.show_invite_ui_async(user)
-	if _mpa_invite_ui_op.is_done():
-		_on_mpa_invite_ui_completed(_mpa_invite_ui_op.get_result())
-	else:
-		_mpa_invite_ui_op.completed.connect(_on_mpa_invite_ui_completed)
+	var completion_signal = gdk.multiplayer_activity.show_invite_ui_async(user)
+	_mpa_invite_ui_in_progress = true
+	completion_signal.connect(_on_mpa_invite_ui_completed, CONNECT_ONE_SHOT)
 	_refresh_mpa_ui()
 
 func _on_mpa_invite_ui_completed(result) -> void:
+	_mpa_invite_ui_in_progress = false
 	if result != null and result.ok:
 		status_label.text = "GDK: Invite UI completed"
 	else:
@@ -508,7 +498,7 @@ func _on_invite_accepted(invite: Dictionary) -> void:
 func _start_achievement_query(user) -> void:
 	if user == null:
 		return
-	if _achievement_query_op != null and not _achievement_query_op.is_done():
+	if _achievement_query_in_progress:
 		return
 
 	var gdk = _get_gdk()
@@ -519,13 +509,12 @@ func _start_achievement_query(user) -> void:
 	achievement_button.disabled = true
 	achievement_label.text = "Achievement %s: syncing current progress..." % DEMO_ACHIEVEMENT_ID
 
-	_achievement_query_op = gdk.achievements.query_player_achievements_async(user)
-	if _achievement_query_op.is_done():
-		_on_achievement_query_completed(_achievement_query_op.get_result())
-	else:
-		_achievement_query_op.completed.connect(_on_achievement_query_completed)
+	var completion_signal = gdk.achievements.query_player_achievements_async(user)
+	_achievement_query_in_progress = true
+	completion_signal.connect(_on_achievement_query_completed, CONNECT_ONE_SHOT)
 
 func _on_achievement_query_completed(result) -> void:
+	_achievement_query_in_progress = false
 	if not result.ok:
 		achievement_button.text = "Update Achievement %s" % DEMO_ACHIEVEMENT_ID
 		achievement_button.disabled = true
@@ -535,7 +524,7 @@ func _on_achievement_query_completed(result) -> void:
 	_refresh_achievement_ui()
 
 func _on_achievement_pressed() -> void:
-	if _achievement_update_op != null and not _achievement_update_op.is_done():
+	if _achievement_update_in_progress:
 		return
 
 	var gdk = _get_gdk()
@@ -555,13 +544,12 @@ func _on_achievement_pressed() -> void:
 	achievement_button.disabled = true
 	achievement_label.text = "Achievement %s: requesting %d%%..." % [DEMO_ACHIEVEMENT_ID, next_progress]
 
-	_achievement_update_op = gdk.achievements.update_achievement_async(user, DEMO_ACHIEVEMENT_ID, next_progress)
-	if _achievement_update_op.is_done():
-		_on_achievement_update_completed(_achievement_update_op.get_result())
-	else:
-		_achievement_update_op.completed.connect(_on_achievement_update_completed)
+	var completion_signal = gdk.achievements.update_achievement_async(user, DEMO_ACHIEVEMENT_ID, next_progress)
+	_achievement_update_in_progress = true
+	completion_signal.connect(_on_achievement_update_completed, CONNECT_ONE_SHOT)
 
 func _on_achievement_update_completed(result) -> void:
+	_achievement_update_in_progress = false
 	if result.ok and result.data:
 		var achievement = result.data
 		achievement_label.text = "Achievement %s: %s (%d%%)" % [
