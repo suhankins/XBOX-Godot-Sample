@@ -52,6 +52,8 @@ docs/
 >   achievements, leaderboards, game saves, lobby, MPA, Party,
 >   integration tech demo)
 > - `sample/tutorial_gameinput/` — standalone GameInput demo
+> - `sample/tutorial_app_csharp/` and `sample/tutorial_gameinput_csharp/`
+>   — C# (.NET) ports of the two tutorial tracks (see the C# facades section)
 >
 > [The tutorials](../docs/tutorials/README.md) walk through each
 > surface, and the test hosts under `tests/godot/` exercise the
@@ -123,6 +125,25 @@ docs/
 - [**XBOX Sandbox and Test Accounts**](platform/xbox-sandbox-and-test-accounts.md)
   — switching the PC into a Partner Center sandbox, signing in the
   XBOX app with a test account, and the error-code lookup table
+
+## C# (.NET) facades
+
+The C++ GDExtensions load unchanged in a Godot **.NET** project. The
+`*_csharp` addons add hand-written managed facades so C# code gets typed
+members, `Task`-based async, and typed result objects — the same ergonomics
+GDScript has. There is no second native runtime; the facades forward to the
+unchanged DLLs.
+
+- [**GDK from C#**](gdk/csharp.md) — `GodotGdk.Gdk` static entry point, services,
+  `Task<GdkResult>` async
+- [**PlayFab from C#**](playfab/csharp.md) — `GodotPlayFab.PlayFab`, cross-addon
+  sign-in (`SignInWithXUserAsync(GdkUser)`), Lobby/Matchmaking/Party
+- [**GameInput from C#**](gameinput/csharp.md) — synchronous poll model, hot-plug
+  events, and the `InputMap` action-map bridge
+- Design + plan: [`spec/gdext-csharp.md`](../spec/gdext-csharp.md)
+- Validation: `tools/run_csharp_tests.ps1` builds the facades and runs
+  `tests/csharp/FacadeParity.Tests`, which asserts every native `doc_classes`
+  member has a managed wrapper
 
 ## Troubleshooting
 
