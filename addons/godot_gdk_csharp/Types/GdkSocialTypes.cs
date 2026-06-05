@@ -32,6 +32,8 @@ public sealed class GdkSocialGroup : GdkObject
     public bool IsLoaded => GetBool("loaded");
     public int GroupType => GetInt32("group_type");
     public string GroupTypeName => Call("get_group_type_name").AsString();
+    public int PresenceFilter => Call("get_presence_filter").AsInt32();
+    public int RelationshipFilter => Call("get_relationship_filter").AsInt32();
     public string[] TrackedXuids => Get("tracked_xuids").AsStringArray();
 }
 
@@ -52,6 +54,9 @@ public sealed class GdkSocialUser : GdkObject
     public bool UsesAvatar => Call("uses_avatar").AsBool();
     public string Gamerscore => GetString("gamerscore");
     public string Gamertag => GetString("gamertag");
+    public string ModernGamertag => Call("get_modern_gamertag").AsString();
+    public string ModernGamertagSuffix => Call("get_modern_gamertag_suffix").AsString();
+    public string UniqueModernGamertag => Call("get_unique_modern_gamertag").AsString();
     public GdkPresenceRecord Presence => GdkPresenceRecord.From(GetObject("presence"));
     public Godot.Collections.Dictionary TitleHistory => GetDict("title_history");
     public Godot.Collections.Dictionary PreferredColor => GetDict("preferred_color");
