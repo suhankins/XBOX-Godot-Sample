@@ -123,6 +123,22 @@ Open items to lock down in Phase 0 (apply to both runtime addons):
 - **Shutdown races** — outstanding signals fire with a failure result on shutdown; the
   bridge must resolve, not hang.
 
+### Multi-argument signal subscription (resolved gotcha)
+
+Godot C#'s `Callable.From` has **no variadic overload** — only fixed-arity
+`Action`/`Func` forms. Writing `Callable.From((Variant[] a) => …)` binds to the
+single-argument generic `From<T0>(Action<T0>)` with `T0 = Variant[]`, producing a
+callable that expects **exactly one** argument. Connecting it to a signal that emits a
+different number of arguments throws `System.ArgumentException: Invalid argument count`
+at emit time (caught in-engine for `GDK.users.user_changed`, a two-argument signal).
+
+The facade bases (`GdkObject`/`PlayFabObject`) therefore expose a `ConnectSignal`
+helper that inspects the signal's real arity via `GetSignalList()` and builds a
+matching fixed-arity `Callable` (see `Internal/SignalArity.cs`) that re-boxes the
+arguments into a `Variant[]` for the arity-agnostic handler. All service and value-type
+wrappers subscribe through `ConnectSignal`; only the static singleton roots
+(`Gdk`/`PlayFab`/`GameInput`) hand-write their connections with the exact arity.
+
 ## `godot_gdk` — C# layer map
 
 Singleton facade `Gdk` (lazy `Engine.GetSingleton("GDK")`), result type `GdkResult`
@@ -466,8 +482,12 @@ added later on demand.)
 ## Progress
 
 Built on branch `feat/gdk-csharp` (not pushed). The C# track is validated with
-`dotnet build` + `dotnet test` (the repo has no `_mono` editor, so in-engine
-GoDotTest hosts are deferred; the headless parity suite is the green bar).
+`dotnet build` + `dotnet test` (headless parity suite) **and** in-engine headless runs
+against a `Godot_v4.6.3-stable_mono_win64` editor. All C# `.csproj` files pin
+`Godot.NET.Sdk/4.6.3` to match that editor. The headless parity suite remains the
+fast green bar; in-engine smoke runs confirm the facades drive the native singletons
+end-to-end (GDK init → `user_changed` → Xbox primary user → cross-addon PlayFab
+sign-in → Lobby/Party wiring; GameInput init → hot-plug device enumeration).
 
 - **Phase 1–2 — GDK facade: ✅ shipped.** `GodotGdk.Gdk` static entry point wiring
   all 21 services, 19 value types, `GdkResult`, the Signal→`Task` bridge,
@@ -482,16 +502,21 @@ GoDotTest hosts are deferred; the headless parity suite is the green bar).
   (sync poll model, hot-plug events, vibration), device/reading wrappers with
   `Button`/`Axis`/`Source`/`DeviceKind` enums, `GameInputActionMap`/`Binding`/
   `Mapper` authoring wrappers + `InputMap` bridge, `GameInputRuntime` autoload,
-  and `sample/tutorial_gameinput_csharp`.
-- **Phase 3 — GDK + PlayFab sample (`tutorial_app_csharp`): 🚧 in progress.**
+  and `sample/tutorial_gameinput_csharp`. In-engine smoke: device hot-plug enumerated,
+  clean shutdown.
+- **Phase 3 — GDK + PlayFab sample (`tutorial_app_csharp`): ✅ shipped.** All eight
+  tutorial scenes, autoloads (`Auth`/`Lobby`/`Party`/bootstraps), and panels ported.
+  In-engine headless smoke completes the full sign-in flow with no errors.
 - **Phase 7 — Tests: ✅ partial.** `tests/csharp/FacadeParity.Tests` (xUnit, 97
   tests) reflects over all three facade assemblies and asserts every native
   `doc_classes` method/member/signal has a managed wrapper; run via
   `tools/run_csharp_tests.ps1`. The suite already caught and fixed real drift in
-  the GDK Social wrappers. In-engine GoDotTest hosts remain deferred (need a
-  `_mono` editor).
+  the GDK Social wrappers. Dedicated in-engine GoDotTest hosts remain a follow-up,
+  but the facades are now exercised in-engine via the sample smoke runs.
 - **Phase 8 — Docs: ✅ shipped.** `docs/gdk/csharp.md`, `docs/playfab/csharp.md`,
   `docs/gameinput/csharp.md`, and the C# section in `docs/README.md`.
-- **Phase 0 — `_mono` editor acquisition + MSIXVC export de-risk: ⬜ deferred**
-  (blocked on a `_mono` Godot editor in this environment).
+- **Phase 0 — `_mono` editor acquisition: ✅ done.** Validated against
+  `Godot_v4.6.3-stable_mono_win64`; the signal-arity subscription bug surfaced and
+  was fixed (see "Multi-argument signal subscription"). MSIXVC .NET export de-risk
+  remains ⬜ deferred.
 

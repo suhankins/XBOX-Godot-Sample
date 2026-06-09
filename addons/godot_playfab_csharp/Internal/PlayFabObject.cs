@@ -38,6 +38,18 @@ public abstract class PlayFabObject
 
     protected Variant Call(string method, params Variant[] args) => _o.Call(method, args);
 
+    /// <summary>
+    /// Connects <paramref name="handler"/> to the native <paramref name="signal"/>.
+    /// Godot's <see cref="Callable.From"/> has no variadic overload — passing an
+    /// <c>Action&lt;Variant[]&gt;</c> binds to the single-argument generic overload
+    /// and throws an argument-count mismatch for any signal that does not emit
+    /// exactly one argument. We therefore inspect the signal's real arity and build
+    /// a callable of matching arity that re-boxes the arguments into a
+    /// <see cref="Variant"/>[] for the handler.
+    /// </summary>
+    protected void ConnectSignal(string signal, Action<Variant[]> handler) =>
+        _o.Connect(signal, SignalArity.MakeVariadic(_o, signal, handler));
+
     protected Task<PlayFabResult> CallResultAsync(string method, params Variant[] args)
     {
         Signal completion = _o.Call(method, args).AsSignal();

@@ -9,8 +9,8 @@ public sealed class PlayFabMatchTicket : PlayFabObject
 {
     internal PlayFabMatchTicket(GodotObject o) : base(o)
     {
-        _o.Connect("state_changed", Callable.From((Variant[] a) =>
-            StateChanged?.Invoke(PlayFabMatchTicketStateChange.From(a[0].AsGodotObject()))));
+        ConnectSignal("state_changed", a =>
+            StateChanged?.Invoke(PlayFabMatchTicketStateChange.From(a[0].AsGodotObject())));
     }
 
     public static PlayFabMatchTicket From(GodotObject o) => o == null ? null : new PlayFabMatchTicket(o);

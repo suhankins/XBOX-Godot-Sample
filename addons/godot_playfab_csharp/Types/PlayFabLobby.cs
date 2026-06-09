@@ -9,8 +9,8 @@ public sealed class PlayFabLobby : PlayFabObject
 {
     internal PlayFabLobby(GodotObject o) : base(o)
     {
-        _o.Connect("state_changed", Callable.From((Variant[] a) =>
-            StateChanged?.Invoke(PlayFabLobbyStateChange.From(a[0].AsGodotObject()))));
+        ConnectSignal("state_changed", a =>
+            StateChanged?.Invoke(PlayFabLobbyStateChange.From(a[0].AsGodotObject())));
     }
 
     public static PlayFabLobby From(GodotObject o) => o == null ? null : new PlayFabLobby(o);
