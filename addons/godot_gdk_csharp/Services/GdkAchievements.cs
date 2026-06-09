@@ -11,12 +11,12 @@ public sealed class GdkAchievements : GdkServiceBase
 {
     internal GdkAchievements(GodotObject o) : base(o)
     {
-        ConnectSignal("achievement_unlocked", a =>
-            AchievementUnlocked?.Invoke(GdkUser.From(a[0].AsGodotObject()), a[1].AsString()));
-        ConnectSignal("achievements_updated", a =>
-            AchievementsUpdated?.Invoke(GdkUser.From(a[0].AsGodotObject())));
-        ConnectSignal("runtime_error", a =>
-            RuntimeError?.Invoke(GdkResult.From(a[0].AsGodotObject())));
+        _o.Connect("achievement_unlocked", Callable.From((Variant a0, Variant a1) =>
+            AchievementUnlocked?.Invoke(GdkUser.From(a0.AsGodotObject()), a1.AsString())));
+        _o.Connect("achievements_updated", Callable.From((Variant a0) =>
+            AchievementsUpdated?.Invoke(GdkUser.From(a0.AsGodotObject()))));
+        _o.Connect("runtime_error", Callable.From((Variant a0) =>
+            RuntimeError?.Invoke(GdkResult.From(a0.AsGodotObject()))));
     }
 
     public event Action<GdkUser, string> AchievementUnlocked;

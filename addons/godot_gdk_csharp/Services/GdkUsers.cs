@@ -11,8 +11,8 @@ public sealed class GdkUsers : GdkServiceBase
 {
     internal GdkUsers(GodotObject o) : base(o)
     {
-        ConnectSignal("user_changed", args =>
-            UserChanged?.Invoke(GdkUser.From(args[0].AsGodotObject()), args[1].AsString()));
+        _o.Connect("user_changed", Callable.From((Variant a0, Variant a1) =>
+            UserChanged?.Invoke(GdkUser.From(a0.AsGodotObject()), a1.AsString())));
     }
 
     /// <summary>Raised for every user lifecycle event (added/removed/changed).</summary>

@@ -10,8 +10,8 @@ public sealed class PlayFabParty : PlayFabServiceBase
 {
     internal PlayFabParty(GodotObject o) : base(o)
     {
-        ConnectSignal("party_error", a =>
-            PartyError?.Invoke(PlayFabResult.From(a[0].AsGodotObject())));
+        _o.Connect("party_error", Callable.From((Variant a0) =>
+            PartyError?.Invoke(PlayFabResult.From(a0.AsGodotObject()))));
     }
 
     public event Action<PlayFabResult> PartyError;

@@ -11,12 +11,12 @@ public sealed class GdkMultiplayerActivity : GdkServiceBase
 {
     internal GdkMultiplayerActivity(GodotObject o) : base(o)
     {
-        ConnectSignal("activities_updated", a =>
-            ActivitiesUpdated?.Invoke(a[0].AsStringArray()));
-        ConnectSignal("pending_invite_received", a =>
-            PendingInviteReceived?.Invoke(a[0].AsGodotDictionary()));
-        ConnectSignal("invite_accepted", a =>
-            InviteAccepted?.Invoke(a[0].AsGodotDictionary()));
+        _o.Connect("activities_updated", Callable.From((Variant a0) =>
+            ActivitiesUpdated?.Invoke(a0.AsStringArray())));
+        _o.Connect("pending_invite_received", Callable.From((Variant a0) =>
+            PendingInviteReceived?.Invoke(a0.AsGodotDictionary())));
+        _o.Connect("invite_accepted", Callable.From((Variant a0) =>
+            InviteAccepted?.Invoke(a0.AsGodotDictionary())));
     }
 
     public event Action<string[]> ActivitiesUpdated;

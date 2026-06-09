@@ -11,14 +11,14 @@ public sealed class GdkSocial : GdkServiceBase
 {
     internal GdkSocial(GodotObject o) : base(o)
     {
-        ConnectSignal("social_graph_changed", a =>
-            SocialGraphChanged?.Invoke(GdkUser.From(a[0].AsGodotObject())));
-        ConnectSignal("social_group_updated", a =>
-            SocialGroupUpdated?.Invoke(GdkSocialGroup.From(a[0].AsGodotObject())));
-        ConnectSignal("social_user_changed", a =>
-            SocialUserChanged?.Invoke(a[0].AsString(), GdkSocialUser.From(a[1].AsGodotObject())));
-        ConnectSignal("runtime_error", a =>
-            RuntimeError?.Invoke(GdkResult.From(a[0].AsGodotObject())));
+        _o.Connect("social_graph_changed", Callable.From((Variant a0) =>
+            SocialGraphChanged?.Invoke(GdkUser.From(a0.AsGodotObject()))));
+        _o.Connect("social_group_updated", Callable.From((Variant a0) =>
+            SocialGroupUpdated?.Invoke(GdkSocialGroup.From(a0.AsGodotObject()))));
+        _o.Connect("social_user_changed", Callable.From((Variant a0, Variant a1) =>
+            SocialUserChanged?.Invoke(a0.AsString(), GdkSocialUser.From(a1.AsGodotObject()))));
+        _o.Connect("runtime_error", Callable.From((Variant a0) =>
+            RuntimeError?.Invoke(GdkResult.From(a0.AsGodotObject()))));
     }
 
     public event Action<GdkUser> SocialGraphChanged;

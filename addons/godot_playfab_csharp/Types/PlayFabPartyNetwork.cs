@@ -9,8 +9,8 @@ public sealed class PlayFabPartyNetwork : PlayFabObject
 {
     internal PlayFabPartyNetwork(GodotObject o) : base(o)
     {
-        ConnectSignal("state_changed", a =>
-            StateChanged?.Invoke(PlayFabPartyNetworkStateChange.From(a[0].AsGodotObject())));
+        _o.Connect("state_changed", Callable.From((Variant a0) =>
+            StateChanged?.Invoke(PlayFabPartyNetworkStateChange.From(a0.AsGodotObject()))));
     }
 
     public static PlayFabPartyNetwork From(GodotObject o) => o == null ? null : new PlayFabPartyNetwork(o);

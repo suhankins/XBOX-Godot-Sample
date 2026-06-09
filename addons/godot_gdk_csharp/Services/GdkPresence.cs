@@ -11,14 +11,14 @@ public sealed class GdkPresence : GdkServiceBase
 {
     internal GdkPresence(GodotObject o) : base(o)
     {
-        ConnectSignal("presence_changed", a =>
-            PresenceChanged?.Invoke(a[0].AsString(), GdkPresenceRecord.From(a[1].AsGodotObject())));
-        ConnectSignal("local_presence_set", a =>
-            LocalPresenceSet?.Invoke(GdkUser.From(a[0].AsGodotObject())));
-        ConnectSignal("device_presence_changed", a =>
-            DevicePresenceChanged?.Invoke(a[0].AsString()));
-        ConnectSignal("title_presence_changed", a =>
-            TitlePresenceChanged?.Invoke(a[0].AsString(), a[1].AsInt32()));
+        _o.Connect("presence_changed", Callable.From((Variant a0, Variant a1) =>
+            PresenceChanged?.Invoke(a0.AsString(), GdkPresenceRecord.From(a1.AsGodotObject()))));
+        _o.Connect("local_presence_set", Callable.From((Variant a0) =>
+            LocalPresenceSet?.Invoke(GdkUser.From(a0.AsGodotObject()))));
+        _o.Connect("device_presence_changed", Callable.From((Variant a0) =>
+            DevicePresenceChanged?.Invoke(a0.AsString())));
+        _o.Connect("title_presence_changed", Callable.From((Variant a0, Variant a1) =>
+            TitlePresenceChanged?.Invoke(a0.AsString(), a1.AsInt32())));
     }
 
     public event Action<string, GdkPresenceRecord> PresenceChanged;

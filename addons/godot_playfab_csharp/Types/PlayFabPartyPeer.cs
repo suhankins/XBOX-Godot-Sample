@@ -9,22 +9,22 @@ public sealed class PlayFabPartyPeer : PlayFabObject
 {
     internal PlayFabPartyPeer(GodotObject o) : base(o)
     {
-        ConnectSignal("connection_state_changed", a =>
-            ConnectionStateChanged?.Invoke(a[0].AsInt32()));
-        ConnectSignal("network_error", a =>
-            NetworkError?.Invoke(PlayFabResult.From(a[0].AsGodotObject())));
-        ConnectSignal("chat_control_added", a =>
-            ChatControlAdded?.Invoke(a[0].AsInt32(), PlayFabPartyChatControl.From(a[1].AsGodotObject())));
-        ConnectSignal("chat_control_removed", a =>
-            ChatControlRemoved?.Invoke(a[0].AsInt32()));
-        ConnectSignal("text_message_received", a =>
-            TextMessageReceived?.Invoke(a[0].AsInt32(), PlayFabPartyChatMessage.From(a[1].AsGodotObject())));
-        ConnectSignal("transcription_received", a =>
-            TranscriptionReceived?.Invoke(a[0].AsInt32(), PlayFabPartyChatMessage.From(a[1].AsGodotObject())));
-        ConnectSignal("chat_permissions_changed", a =>
-            ChatPermissionsChanged?.Invoke(a[0].AsInt32(), a[1].AsInt32()));
-        ConnectSignal("peer_muted_changed", a =>
-            PeerMutedChanged?.Invoke(a[0].AsInt32(), a[1].AsBool()));
+        _o.Connect("connection_state_changed", Callable.From((Variant a0) =>
+            ConnectionStateChanged?.Invoke(a0.AsInt32())));
+        _o.Connect("network_error", Callable.From((Variant a0) =>
+            NetworkError?.Invoke(PlayFabResult.From(a0.AsGodotObject()))));
+        _o.Connect("chat_control_added", Callable.From((Variant a0, Variant a1) =>
+            ChatControlAdded?.Invoke(a0.AsInt32(), PlayFabPartyChatControl.From(a1.AsGodotObject()))));
+        _o.Connect("chat_control_removed", Callable.From((Variant a0) =>
+            ChatControlRemoved?.Invoke(a0.AsInt32())));
+        _o.Connect("text_message_received", Callable.From((Variant a0, Variant a1) =>
+            TextMessageReceived?.Invoke(a0.AsInt32(), PlayFabPartyChatMessage.From(a1.AsGodotObject()))));
+        _o.Connect("transcription_received", Callable.From((Variant a0, Variant a1) =>
+            TranscriptionReceived?.Invoke(a0.AsInt32(), PlayFabPartyChatMessage.From(a1.AsGodotObject()))));
+        _o.Connect("chat_permissions_changed", Callable.From((Variant a0, Variant a1) =>
+            ChatPermissionsChanged?.Invoke(a0.AsInt32(), a1.AsInt32())));
+        _o.Connect("peer_muted_changed", Callable.From((Variant a0, Variant a1) =>
+            PeerMutedChanged?.Invoke(a0.AsInt32(), a1.AsBool())));
     }
 
     public static PlayFabPartyPeer From(GodotObject o) => o == null ? null : new PlayFabPartyPeer(o);

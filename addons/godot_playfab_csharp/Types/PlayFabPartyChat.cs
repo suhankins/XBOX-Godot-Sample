@@ -9,8 +9,8 @@ public sealed class PlayFabPartyChat : PlayFabObject
 {
     internal PlayFabPartyChat(GodotObject o) : base(o)
     {
-        ConnectSignal("state_changed", a =>
-            StateChanged?.Invoke(PlayFabPartyChatStateChange.From(a[0].AsGodotObject())));
+        _o.Connect("state_changed", Callable.From((Variant a0) =>
+            StateChanged?.Invoke(PlayFabPartyChatStateChange.From(a0.AsGodotObject()))));
     }
 
     public static PlayFabPartyChat From(GodotObject o) => o == null ? null : new PlayFabPartyChat(o);

@@ -11,12 +11,12 @@ public sealed class GdkStats : GdkServiceBase
 {
     internal GdkStats(GodotObject o) : base(o)
     {
-        ConnectSignal("stats_updated", a =>
-            StatsUpdated?.Invoke(GdkUser.From(a[0].AsGodotObject()), a[1].AsGodotDictionary()));
-        ConnectSignal("stat_changed", a =>
-            StatChanged?.Invoke(GdkUser.From(a[0].AsGodotObject()), a[1].AsString(), a[2]));
-        ConnectSignal("stats_flushed", a =>
-            StatsFlushed?.Invoke(GdkUser.From(a[0].AsGodotObject()), GdkResult.From(a[1].AsGodotObject())));
+        _o.Connect("stats_updated", Callable.From((Variant a0, Variant a1) =>
+            StatsUpdated?.Invoke(GdkUser.From(a0.AsGodotObject()), a1.AsGodotDictionary())));
+        _o.Connect("stat_changed", Callable.From((Variant a0, Variant a1, Variant a2) =>
+            StatChanged?.Invoke(GdkUser.From(a0.AsGodotObject()), a1.AsString(), a2)));
+        _o.Connect("stats_flushed", Callable.From((Variant a0, Variant a1) =>
+            StatsFlushed?.Invoke(GdkUser.From(a0.AsGodotObject()), GdkResult.From(a1.AsGodotObject()))));
     }
 
     public event Action<GdkUser, Godot.Collections.Dictionary> StatsUpdated;

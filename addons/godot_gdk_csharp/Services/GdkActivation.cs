@@ -9,11 +9,11 @@ public sealed class GdkActivation : GdkServiceBase
 {
     internal GdkActivation(GodotObject o) : base(o)
     {
-        ConnectSignal("protocol_activated", a => ProtocolActivated?.Invoke(a[0].AsString()));
-        ConnectSignal("file_activated", a => FileActivated?.Invoke(a[0].AsString()));
-        ConnectSignal("pending_invite_received", a => PendingInviteReceived?.Invoke(a[0].AsGodotDictionary()));
-        ConnectSignal("invite_accepted", a => InviteAccepted?.Invoke(a[0].AsGodotDictionary()));
-        ConnectSignal("activated", a => Activated?.Invoke(a[0].AsGodotDictionary()));
+        _o.Connect("protocol_activated", Callable.From((Variant a0) => ProtocolActivated?.Invoke(a0.AsString())));
+        _o.Connect("file_activated", Callable.From((Variant a0) => FileActivated?.Invoke(a0.AsString())));
+        _o.Connect("pending_invite_received", Callable.From((Variant a0) => PendingInviteReceived?.Invoke(a0.AsGodotDictionary())));
+        _o.Connect("invite_accepted", Callable.From((Variant a0) => InviteAccepted?.Invoke(a0.AsGodotDictionary())));
+        _o.Connect("activated", Callable.From((Variant a0) => Activated?.Invoke(a0.AsGodotDictionary())));
     }
 
     public event Action<string> ProtocolActivated;

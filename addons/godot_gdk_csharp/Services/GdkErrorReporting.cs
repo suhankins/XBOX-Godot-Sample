@@ -9,8 +9,8 @@ public sealed class GdkErrorReporting : GdkServiceBase
 {
     internal GdkErrorReporting(GodotObject o) : base(o)
     {
-        ConnectSignal("error_reported", a =>
-            ErrorReported?.Invoke(GdkResult.From(a[0].AsGodotObject())));
+        _o.Connect("error_reported", Callable.From((Variant a0) =>
+            ErrorReported?.Invoke(GdkResult.From(a0.AsGodotObject()))));
     }
 
     public event Action<GdkResult> ErrorReported;

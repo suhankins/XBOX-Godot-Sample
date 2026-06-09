@@ -10,12 +10,12 @@ public sealed class PlayFabMultiplayer : PlayFabServiceBase
 {
     internal PlayFabMultiplayer(GodotObject o) : base(o)
     {
-        ConnectSignal("state_changed", a =>
-            StateChanged?.Invoke(PlayFabMultiplayerStateChange.From(a[0].AsGodotObject())));
-        ConnectSignal("invite_received", a =>
-            InviteReceived?.Invoke(PlayFabLobbyInvite.From(a[0].AsGodotObject())));
-        ConnectSignal("multiplayer_error", a =>
-            MultiplayerError?.Invoke(PlayFabResult.From(a[0].AsGodotObject())));
+        _o.Connect("state_changed", Callable.From((Variant a0) =>
+            StateChanged?.Invoke(PlayFabMultiplayerStateChange.From(a0.AsGodotObject()))));
+        _o.Connect("invite_received", Callable.From((Variant a0) =>
+            InviteReceived?.Invoke(PlayFabLobbyInvite.From(a0.AsGodotObject()))));
+        _o.Connect("multiplayer_error", Callable.From((Variant a0) =>
+            MultiplayerError?.Invoke(PlayFabResult.From(a0.AsGodotObject()))));
     }
 
     public event Action<PlayFabMultiplayerStateChange> StateChanged;

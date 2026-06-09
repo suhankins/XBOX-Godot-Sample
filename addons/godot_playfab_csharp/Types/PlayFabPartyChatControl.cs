@@ -9,12 +9,12 @@ public sealed class PlayFabPartyChatControl : PlayFabObject
 {
     internal PlayFabPartyChatControl(GodotObject o) : base(o)
     {
-        ConnectSignal("state_changed", a =>
-            StateChanged?.Invoke(PlayFabPartyChatStateChange.From(a[0].AsGodotObject())));
-        ConnectSignal("message_received", a =>
-            MessageReceived?.Invoke(PlayFabPartyChatMessage.From(a[0].AsGodotObject())));
-        ConnectSignal("transcription_received", a =>
-            TranscriptionReceived?.Invoke(PlayFabPartyChatMessage.From(a[0].AsGodotObject())));
+        _o.Connect("state_changed", Callable.From((Variant a0) =>
+            StateChanged?.Invoke(PlayFabPartyChatStateChange.From(a0.AsGodotObject()))));
+        _o.Connect("message_received", Callable.From((Variant a0) =>
+            MessageReceived?.Invoke(PlayFabPartyChatMessage.From(a0.AsGodotObject()))));
+        _o.Connect("transcription_received", Callable.From((Variant a0) =>
+            TranscriptionReceived?.Invoke(PlayFabPartyChatMessage.From(a0.AsGodotObject()))));
     }
 
     public static PlayFabPartyChatControl From(GodotObject o) => o == null ? null : new PlayFabPartyChatControl(o);

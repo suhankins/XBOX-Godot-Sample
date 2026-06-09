@@ -132,12 +132,18 @@ callable that expects **exactly one** argument. Connecting it to a signal that e
 different number of arguments throws `System.ArgumentException: Invalid argument count`
 at emit time (caught in-engine for `GDK.users.user_changed`, a two-argument signal).
 
-The facade bases (`GdkObject`/`PlayFabObject`) therefore expose a `ConnectSignal`
-helper that inspects the signal's real arity via `GetSignalList()` and builds a
-matching fixed-arity `Callable` (see `Internal/SignalArity.cs`) that re-boxes the
-arguments into a `Variant[]` for the arity-agnostic handler. All service and value-type
-wrappers subscribe through `ConnectSignal`; only the static singleton roots
-(`Gdk`/`PlayFab`/`GameInput`) hand-write their connections with the exact arity.
+Every facade signal subscription therefore uses the conventional Godot C# idiom: an
+**exact-arity typed lambda** whose parameter count matches the native signal, e.g.
+
+```csharp
+_o.Connect("user_changed", Callable.From((Variant a0, Variant a1) =>
+    UserChanged?.Invoke(GdkUser.From(a0.AsGodotObject()), a1.AsString())));
+```
+
+`Variant`-typed parameters keep the per-argument `.AsX()` conversions explicit. Signal
+arities come from the native `doc_classes` `<signal>` definitions; the parity test suite
+also asserts each wrapped signal exists, so an arity drift surfaces as a build/test
+failure rather than a silent runtime mismatch.
 
 ## `godot_gdk` — C# layer map
 

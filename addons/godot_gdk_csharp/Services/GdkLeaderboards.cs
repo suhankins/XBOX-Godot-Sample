@@ -11,8 +11,8 @@ public sealed class GdkLeaderboards : GdkServiceBase
 {
     internal GdkLeaderboards(GodotObject o) : base(o)
     {
-        ConnectSignal("leaderboard_updated", a =>
-            LeaderboardUpdated?.Invoke(a[0].AsString(), GdkLeaderboard.From(a[1].AsGodotObject())));
+        _o.Connect("leaderboard_updated", Callable.From((Variant a0, Variant a1) =>
+            LeaderboardUpdated?.Invoke(a0.AsString(), GdkLeaderboard.From(a1.AsGodotObject()))));
     }
 
     public event Action<string, GdkLeaderboard> LeaderboardUpdated;
